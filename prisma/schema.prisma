@@ -1,0 +1,30 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DevicePlatform {
+  ios
+  android
+}
+
+// One row per (user, device). Holds the Expo push token Ping needs to
+// deliver notifications; mirrors the device shape Ping's /devices API expects.
+model PushDevice {
+  id              String         @id @default(uuid())
+  userId          String
+  platform        DevicePlatform
+  expoPushToken   String         @unique
+  pingDeviceId    String?        @unique // id returned by Ping after registration
+  isActive        Boolean        @default(true)
+  lastRegisteredAt DateTime      @default(now())
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([userId])
+  @@map("push_devices")
+}
