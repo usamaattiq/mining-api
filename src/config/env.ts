@@ -36,7 +36,7 @@ const envSchema = z.object({
   WHATSAPP_API_TIMEOUT: z.coerce.number().default(30000),
   WHATSAPP_OTP_TEMPLATE_NAME: z.string().default('otp'),
   WHATSAPP_OTP_TEMPLATE_LANGUAGE: z.string().default('en_US'),
-  PLATFORM_DISPLAY_NAME: z.string().default('Mining'),
+  PLATFORM_DISPLAY_NAME: z.string().default('Dahabi'),
 });
 
 const parsed = envSchema.safeParse(process.env);
