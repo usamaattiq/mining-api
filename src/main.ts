@@ -5,6 +5,8 @@ import helmet from 'helmet';
 import pino from 'pino';
 import { notificationsRouter } from './modules/notifications/notifications.router';
 import { authRoutes } from './modules/auth/auth.routes';
+import { uploadsRouter } from './modules/uploads/uploads.router';
+import { locationsRouter } from './modules/locations/locations.router';
 
 const logger = pino({
   transport: process.env.NODE_ENV !== 'production' ? { target: 'pino-pretty' } : undefined,
@@ -27,6 +29,8 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/notifications', notificationsRouter);
+app.use('/api/uploads', uploadsRouter);
+app.use('/api/locations', locationsRouter);
 
 const port = Number(process.env.PORT ?? 4000);
 const host = process.env.HOST ?? '0.0.0.0';

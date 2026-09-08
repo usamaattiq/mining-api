@@ -28,6 +28,19 @@ const envSchema = z.object({
   /** Comma-separated E.164 phone numbers exempt from the OTP send-rate-limit (testing/QA). */
   OTP_RATE_LIMIT_EXEMPT_PHONES: z.string().default(''),
 
+  // AWS S3 (uploads)
+  AWS_REGION: z.string().min(1, 'AWS_REGION is required'),
+  AWS_S3_BUCKET: z.string().min(1, 'AWS_S3_BUCKET is required'),
+  AWS_ACCESS_KEY_ID: z.string().min(1, 'AWS_ACCESS_KEY_ID is required'),
+  AWS_SECRET_ACCESS_KEY: z.string().min(1, 'AWS_SECRET_ACCESS_KEY is required'),
+  S3_PRESIGN_EXPIRES_IN: z.coerce.number().default(300),
+  S3_PRESIGN_GET_EXPIRES_IN: z.coerce.number().default(3600),
+
+  // Google Maps Platform server key — Places Autocomplete / Place Details / Geocoding
+  // only. Mobile keys stay Maps SDK–only (app-restricted) and never call these APIs.
+  GOOGLE_MAPS_SERVER_API_KEY: z.string().min(1, 'GOOGLE_MAPS_SERVER_API_KEY is required'),
+  GOOGLE_MAPS_API_TIMEOUT: z.coerce.number().default(8000),
+
   // WhatsApp (OTP delivery)
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
   WHATSAPP_ACCESS_TOKEN: z.string().optional(),
