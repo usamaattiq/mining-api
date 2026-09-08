@@ -63,7 +63,7 @@ export const signupSubmitBodySchema = z.object({
         })
         .nullable()
         .optional(),
-      avatarUrl: z.string().url().nullable().optional(),
+      avatarUrl: z.string().trim().min(1).nullable().optional(),
       mpin: mpinSchema,
       biometricEnabled: z.boolean().default(false),
       deviceId: deviceIdSchema.default('unknown-device'),
@@ -143,7 +143,7 @@ export const updateProfileBodySchema = z.object({
         })
         .nullable()
         .optional(),
-      avatarUrl: z.string().url().nullable().optional(),
+      avatarUrl: z.string().trim().min(1).nullable().optional(),
       biometricEnabled: z.boolean().optional(),
     })
     .refine((value) => Object.keys(value).length > 0, {
