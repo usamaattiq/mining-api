@@ -14,6 +14,29 @@ const envSchema = z.object({
   PING_BASE_URL: z.string().url('PING_BASE_URL must be a valid URL'),
   PING_API_KEY: z.string().min(1, 'PING_API_KEY is required'),
   PING_API_TIMEOUT: z.coerce.number().default(30000),
+
+  // Auth
+  JWT_SECRET: z.string().min(16, 'JWT_SECRET is required'),
+  JWT_EXPIRES_IN: z.string().default('30d'),
+  OTP_EXPIRES_MINUTES: z.coerce.number().default(5),
+  OTP_REAL_ENABLED: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true'),
+  MPIN_LOCKOUT_ATTEMPTS: z.coerce.number().default(5),
+  MPIN_LOCKOUT_MINUTES: z.coerce.number().default(15),
+  /** Comma-separated E.164 phone numbers exempt from the OTP send-rate-limit (testing/QA). */
+  OTP_RATE_LIMIT_EXEMPT_PHONES: z.string().default(''),
+
+  // WhatsApp (OTP delivery)
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  WHATSAPP_ACCESS_TOKEN: z.string().optional(),
+  WHATSAPP_API_BASE_URL: z.string().default('https://graph.facebook.com'),
+  WHATSAPP_API_VERSION: z.string().default('v22.0'),
+  WHATSAPP_API_TIMEOUT: z.coerce.number().default(30000),
+  WHATSAPP_OTP_TEMPLATE_NAME: z.string().default('otp'),
+  WHATSAPP_OTP_TEMPLATE_LANGUAGE: z.string().default('en_US'),
+  PLATFORM_DISPLAY_NAME: z.string().default('Mining'),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -4,6 +4,7 @@ import express from 'express';
 import helmet from 'helmet';
 import pino from 'pino';
 import { notificationsRouter } from './modules/notifications/notifications.router';
+import { authRoutes } from './modules/auth/auth.routes';
 
 const logger = pino({
   transport: process.env.NODE_ENV !== 'production' ? { target: 'pino-pretty' } : undefined,
@@ -24,6 +25,7 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
+app.use('/api/auth', authRoutes);
 app.use('/api/notifications', notificationsRouter);
 
 const port = Number(process.env.PORT ?? 4000);

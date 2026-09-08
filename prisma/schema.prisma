@@ -12,6 +12,85 @@ enum DevicePlatform {
   android
 }
 
+enum OtpPurpose {
+  SIGNUP
+  LOGIN
+  MPIN_RESET
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+model User {
+  id                 String     @id @default(uuid())
+  fullName           String
+  phoneE164          String     @unique
+  countryCode        String
+  countryCallingCode String
+  email              String?    @unique
+  address            String?
+  latitude           Float?
+  longitude          Float?
+  avatarUrl          String?
+  biometricEnabled   Boolean    @default(false)
+  status             UserStatus @default(ACTIVE)
+  isVerified         Boolean    @default(false)
+  lastLoginAt        DateTime?
+  deletedAt          DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  credential UserCredential?
+  sessions   UserSession[]
+
+  @@map("users")
+}
+
+model UserCredential {
+  id             String    @id @default(uuid())
+  userId         String    @unique
+  mpinHash       String
+  failedAttempts Int       @default(0)
+  lockedUntil    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_credentials")
+}
+
+model UserSession {
+  id        String    @id @default(uuid())
+  userId    String
+  deviceId  String
+  jti       String    @unique
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, deviceId])
+  @@map("user_sessions")
+}
+
+model OtpChallenge {
+  id         String     @id @default(uuid())
+  phoneE164  String
+  purpose    OtpPurpose
+  codeHash   String
+  attempts   Int        @default(0)
+  expiresAt  DateTime
+  verifiedAt DateTime?
+  createdAt  DateTime   @default(now())
+
+  @@index([phoneE164, purpose, createdAt])
+  @@map("otp_challenges")
+}
+
 // One row per (user, device). Holds the Expo push token Ping needs to
 // deliver notifications; mirrors the device shape Ping's /devices API expects.
 model PushDevice {
