@@ -1,4 +1,4 @@
-import type { Prisma, User } from '@prisma/client';
+import type { AccountType, Prisma, User } from '@prisma/client';
 import { prisma } from '../../../common/database/prisma';
 
 type Tx = Prisma.TransactionClient;
@@ -27,6 +27,8 @@ class UserRepository {
       latitude: number | null;
       longitude: number | null;
       avatarUrl: string | null;
+      accountType: AccountType;
+      companyName: string | null;
       biometricEnabled: boolean;
       isVerified: boolean;
     },
@@ -39,6 +41,8 @@ class UserRepository {
     id: string,
     data: Partial<{
       fullName: string;
+      accountType: AccountType;
+      companyName: string | null;
       email: string | null;
       address: string | null;
       latitude: number | null;

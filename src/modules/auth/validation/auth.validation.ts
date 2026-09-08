@@ -52,6 +52,8 @@ export const signupSubmitBodySchema = z.object({
       countryCallingCode: z.string().min(1).max(8),
       phoneDigits: phoneDigitsSchema,
       fullName: z.string().trim().min(2).max(150),
+      accountType: z.enum(['individual', 'company']).default('individual'),
+      companyName: z.string().trim().min(1).max(150).optional(),
       email: z.union([z.string().trim().email(), z.literal('')]).optional(),
       address: z.union([z.string().trim().max(500), z.literal('')]).optional(),
       locationCoordinates: z
@@ -66,7 +68,16 @@ export const signupSubmitBodySchema = z.object({
       biometricEnabled: z.boolean().default(false),
       deviceId: deviceIdSchema.default('unknown-device'),
     })
-    .superRefine(requirePhoneIdentity),
+    .superRefine(requirePhoneIdentity)
+    .superRefine((value, ctx) => {
+      if (value.accountType === 'company' && !value.companyName) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['companyName'],
+          message: 'companyName is required when accountType is company',
+        });
+      }
+    }),
 });
 
 const loginOtpPurposeSchema = z.enum(['login', 'mpin_reset']).default('login');
@@ -121,6 +132,8 @@ export const updateProfileBodySchema = z.object({
   body: z
     .object({
       fullName: z.string().trim().min(2).max(150).optional(),
+      accountType: z.enum(['individual', 'company']).optional(),
+      companyName: z.union([z.string().trim().min(1).max(150), z.literal(''), z.null()]).optional(),
       email: z.union([z.string().trim().email(), z.literal(''), z.null()]).optional(),
       address: z.union([z.string().trim().max(500), z.literal(''), z.null()]).optional(),
       locationCoordinates: z

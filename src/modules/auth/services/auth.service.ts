@@ -1,4 +1,4 @@
-import { OtpPurpose, UserStatus } from '@prisma/client';
+import { AccountType, OtpPurpose, UserStatus } from '@prisma/client';
 import { env } from '../../../config/env';
 import { runInTransaction } from '../../../common/database/transaction';
 import { AppError } from '../../../common/errors/app-error';
@@ -84,6 +84,10 @@ class AuthService {
       }
     }
 
+    if (input.accountType === 'company' && !input.companyName?.trim()) {
+      throw new AppError('Company name is required', 400, ErrorCode.VALIDATION_ERROR);
+    }
+
     const mpinHash = await hashSecret(input.mpin);
     const coords = input.locationCoordinates ?? null;
 
@@ -99,6 +103,9 @@ class AuthService {
           latitude: coords?.latitude ?? null,
           longitude: coords?.longitude ?? null,
           avatarUrl: input.avatarUrl ?? null,
+          accountType:
+            input.accountType === 'company' ? AccountType.COMPANY : AccountType.INDIVIDUAL,
+          companyName: input.accountType === 'company' ? emptyToNull(input.companyName) : null,
           biometricEnabled: input.biometricEnabled,
           isVerified: false,
         },
@@ -224,8 +231,20 @@ class AuthService {
 
     const coords = input.locationCoordinates;
 
+    if (input.accountType === 'company' && input.companyName !== undefined && !input.companyName) {
+      throw new AppError('Company name is required', 400, ErrorCode.VALIDATION_ERROR);
+    }
+
     const updated = await userRepository.updateProfile(userId, {
       ...(input.fullName !== undefined ? { fullName: input.fullName.trim() } : {}),
+      ...(input.accountType !== undefined
+        ? {
+            accountType:
+              input.accountType === 'company' ? AccountType.COMPANY : AccountType.INDIVIDUAL,
+            ...(input.accountType === 'individual' ? { companyName: null } : {}),
+          }
+        : {}),
+      ...(input.companyName !== undefined ? { companyName: emptyToNull(input.companyName) } : {}),
       ...(nextEmail !== undefined ? { email: nextEmail } : {}),
       ...(input.address !== undefined ? { address: emptyToNull(input.address) } : {}),
       ...(coords !== undefined

@@ -24,24 +24,31 @@ enum UserStatus {
   DEACTIVATED
 }
 
+enum AccountType {
+  INDIVIDUAL
+  COMPANY
+}
+
 model User {
-  id                 String     @id @default(uuid())
+  id                 String      @id @default(uuid())
   fullName           String
-  phoneE164          String     @unique
+  phoneE164          String      @unique
   countryCode        String
   countryCallingCode String
-  email              String?    @unique
+  email              String?     @unique
   address            String?
   latitude           Float?
   longitude          Float?
   avatarUrl          String?
-  biometricEnabled   Boolean    @default(false)
-  status             UserStatus @default(ACTIVE)
-  isVerified         Boolean    @default(false)
+  accountType        AccountType @default(INDIVIDUAL)
+  companyName        String?
+  biometricEnabled   Boolean     @default(false)
+  status             UserStatus  @default(ACTIVE)
+  isVerified         Boolean     @default(false)
   lastLoginAt        DateTime?
   deletedAt          DateTime?
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
   credential UserCredential?
   sessions   UserSession[]
