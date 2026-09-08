@@ -14,8 +14,3 @@ uploadsRouter.post(
   validate(presignUploadBodySchema),
   wrap((req, res) => uploadController.createUploadUrl(req, res)),
 );
-
-uploadsRouter.get(
-  '/presign-view',
-  wrap((req, res) => uploadController.createViewUrl(req, res)),
-);

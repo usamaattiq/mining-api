@@ -22,7 +22,3 @@ export const presignUploadBodySchema = z.object({
 });
 
 export type PresignUploadInput = z.infer<typeof presignUploadBodySchema>['body'];
-
-export const presignViewQuerySchema = z.object({
-  key: z.string().min(1, 'key is required'),
-});
