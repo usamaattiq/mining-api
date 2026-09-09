@@ -36,11 +36,6 @@ const envSchema = z.object({
   AWS_S3_PUBLIC_BASE_URL: z.string().url('AWS_S3_PUBLIC_BASE_URL must be a valid URL'),
   S3_PRESIGN_EXPIRES_IN: z.coerce.number().default(300),
 
-  // Google Maps Platform server key — Places Autocomplete / Place Details / Geocoding
-  // only. Mobile keys stay Maps SDK–only (app-restricted) and never call these APIs.
-  GOOGLE_MAPS_SERVER_API_KEY: z.string().min(1, 'GOOGLE_MAPS_SERVER_API_KEY is required'),
-  GOOGLE_MAPS_API_TIMEOUT: z.coerce.number().default(8000),
-
   // WhatsApp (OTP delivery)
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
   WHATSAPP_ACCESS_TOKEN: z.string().optional(),
