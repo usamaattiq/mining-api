@@ -47,8 +47,7 @@ class AuthService {
     const existing = await userRepository.findByPhoneE164(phoneE164);
 
     if (existing) {
-      // Privacy: respond success but skip OTP so callers cannot infer account existence.
-      return;
+      throw new AppError('This phone number is already registered', 409, ErrorCode.CONFLICT);
     }
 
     await otpService.sendOtp(phoneE164, OtpPurpose.SIGNUP);
@@ -69,11 +68,7 @@ class AuthService {
 
     const existing = await userRepository.findByPhoneE164(phoneE164);
     if (existing) {
-      throw new AppError(
-        'Unable to complete signup. Please verify your phone number and try again.',
-        400,
-        ErrorCode.VALIDATION_ERROR,
-      );
+      throw new AppError('This phone number is already registered', 409, ErrorCode.CONFLICT);
     }
 
     const email = normalizeEmail(input.email);
