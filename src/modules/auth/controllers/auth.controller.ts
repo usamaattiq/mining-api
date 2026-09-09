@@ -8,6 +8,7 @@ import type {
   LoginOtpSendBody,
   LoginOtpVerifyBody,
   ResetMpinBody,
+  SignupEmailCheckBody,
   SignupOtpSendBody,
   SignupOtpVerifyBody,
   SignupSubmitBody,
@@ -25,6 +26,12 @@ class AuthController {
     const body = req.validatedBody as SignupOtpVerifyBody;
     await authService.verifySignupOtp(body);
     sendSuccess(res, 200, { verified: true });
+  }
+
+  async checkSignupEmail(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const body = req.validatedBody as SignupEmailCheckBody;
+    const result = await authService.checkSignupEmailAvailable(body);
+    sendSuccess(res, 200, result);
   }
 
   async submitSignup(req: AuthenticatedRequest, res: Response): Promise<void> {

@@ -15,6 +15,7 @@ import type {
   LoginOtpSendBody,
   LoginOtpVerifyBody,
   ResetMpinBody,
+  SignupEmailCheckBody,
   SignupOtpSendBody,
   SignupOtpVerifyBody,
   SignupSubmitBody,
@@ -56,6 +57,12 @@ class AuthService {
   async verifySignupOtp(input: SignupOtpVerifyBody): Promise<void> {
     const phoneE164 = resolvePhoneE164(input);
     await otpService.verifyOtp(phoneE164, OtpPurpose.SIGNUP, input.otp);
+  }
+
+  async checkSignupEmailAvailable(input: SignupEmailCheckBody): Promise<{ available: boolean }> {
+    const email = normalizeEmail(input.email);
+    const emailOwner = email ? await userRepository.findByEmail(email) : null;
+    return { available: !emailOwner };
   }
 
   async submitSignup(input: SignupSubmitBody): Promise<AuthSignupResultDto> {

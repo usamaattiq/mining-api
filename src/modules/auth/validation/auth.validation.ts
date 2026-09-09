@@ -80,6 +80,12 @@ export const signupSubmitBodySchema = z.object({
     }),
 });
 
+export const signupEmailCheckBodySchema = z.object({
+  body: z.object({
+    email: z.string().trim().email(),
+  }),
+});
+
 const loginOtpPurposeSchema = z.enum(['login', 'mpin_reset']).default('login');
 
 export const loginOtpSendBodySchema = z.object({
@@ -162,6 +168,7 @@ export const logoutBodySchema = z.object({
 export type SignupOtpSendBody = z.infer<typeof signupOtpSendBodySchema>['body'];
 export type SignupOtpVerifyBody = z.infer<typeof signupOtpVerifyBodySchema>['body'];
 export type SignupSubmitBody = z.infer<typeof signupSubmitBodySchema>['body'];
+export type SignupEmailCheckBody = z.infer<typeof signupEmailCheckBodySchema>['body'];
 export type LoginOtpSendBody = z.infer<typeof loginOtpSendBodySchema>['body'];
 export type LoginOtpVerifyBody = z.infer<typeof loginOtpVerifyBodySchema>['body'];
 export type LoginMpinBody = z.infer<typeof loginMpinBodySchema>['body'];
