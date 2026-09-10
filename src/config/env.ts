@@ -15,6 +15,30 @@ const envSchema = z.object({
   PING_API_KEY: z.string().min(1, 'PING_API_KEY is required'),
   PING_API_TIMEOUT: z.coerce.number().default(30000),
 
+  // RFQ HTTP client (wired when RFQ service is configured)
+  RFQ_BASE_URL: z.string().optional(),
+  RFQ_API_KEY: z.string().optional(),
+  RFQ_API_TIMEOUT: z.coerce.number().default(30000),
+
+  // RFQ Pub/Sub consumer (RMS publishes facts to rfq-events; mining maps → Ping)
+  PUBSUB_ENABLED: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true'),
+  PUBSUB_PROJECT_ID: z.string().optional(),
+  /** Topic RMS publishes to (mining only subscribes; kept for docs/ops). */
+  PUBSUB_TOPIC_ID: z.string().default('rfq-events'),
+  PUBSUB_SUBSCRIPTION_ID: z.string().default('mining-api-rfq-events'),
+  /** Must match RFQ API key / RFQ platform_id and Pub/Sub subscription filter. */
+  RMS_PLATFORM_ID: z.string().default('mining'),
+  /**
+   * Path to GCP service-account JSON for Pub/Sub.
+   * Leave empty when using ADC / workload identity / emulator.
+   */
+  GOOGLE_APPLICATION_CREDENTIALS: z.string().optional(),
+  /** Set for local emulator, e.g. localhost:8086. Empty in production. */
+  PUBSUB_EMULATOR_HOST: z.string().optional(),
+
   // Auth
   JWT_SECRET: z.string().min(16, 'JWT_SECRET is required'),
   JWT_EXPIRES_IN: z.string().default('30d'),

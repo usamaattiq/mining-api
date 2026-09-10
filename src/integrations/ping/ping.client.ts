@@ -1,14 +1,14 @@
 import { env } from '../../config/env';
 import type {
-  RegisterDeviceRequest,
-  RegisterDeviceResponse,
-  SendNotificationRequest,
-  SendNotificationResponse,
+  PingDevice,
+  PingRegisterDeviceRequest,
+  PingSendNotificationRequest,
+  PingSendNotificationResult,
 } from './ping.types';
+import { unwrapPingData } from './ping.types';
 
-// mining-api is registered as an "app" tenant in Ping and authenticates
-// with a per-app API key. Ping is the ONLY thing that talks to Expo/FCM/APNs
-// directly — every other service (this one included) goes through it.
+// mining-api is a Ping "app" tenant. Authenticate with the per-app API key.
+// Ping is the only service that talks to Expo/FCM/APNs — all other services go through it.
 export class PingApiError extends Error {
   constructor(
     message: string,
@@ -21,39 +21,59 @@ export class PingApiError extends Error {
 }
 
 class PingClient {
-  private readonly baseUrl = env.PING_BASE_URL.replace(/\/+$/, '');
   private readonly apiKey = env.PING_API_KEY;
   private readonly timeoutMs = env.PING_API_TIMEOUT;
 
-  async registerDevice(payload: RegisterDeviceRequest): Promise<RegisterDeviceResponse> {
-    return this.request<RegisterDeviceResponse>('POST', '/api/v1/devices', payload);
+  private get apiRoot(): string {
+    const base = env.PING_BASE_URL.replace(/\/+$/, '');
+    return base.endsWith('/api/v1') ? base : `${base}/api/v1`;
   }
 
-  async unregisterDevice(pingDeviceId: string): Promise<void> {
-    await this.request<void>('DELETE', `/api/v1/devices/${pingDeviceId}`);
+  async registerDevice(payload: PingRegisterDeviceRequest): Promise<PingDevice> {
+    const data = await this.request<unknown>('POST', '/devices', payload);
+    return unwrapPingData<PingDevice>(data);
   }
 
-  async sendNotification(payload: SendNotificationRequest): Promise<SendNotificationResponse> {
-    return this.request<SendNotificationResponse>('POST', '/api/v1/notifications/send', payload);
+  async unregisterDevice(pushToken: string): Promise<void> {
+    await this.request<unknown>('POST', '/devices/unregister', { pushToken });
   }
 
-  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  async sendNotification(
+    payload: PingSendNotificationRequest,
+  ): Promise<PingSendNotificationResult> {
+    const { idempotencyKey, ...body } = payload;
+    const headers: Record<string, string> = {};
+    if (idempotencyKey) {
+      headers['Idempotency-Key'] = idempotencyKey;
+    }
+
+    const data = await this.request<unknown>('POST', '/notifications/send', body, headers);
+    return unwrapPingData<PingSendNotificationResult>(data);
+  }
+
+  private async request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    extraHeaders?: Record<string, string>,
+  ): Promise<T> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
-      const res = await fetch(`${this.baseUrl}${path}`, {
+      const res = await fetch(`${this.apiRoot}${path}`, {
         method,
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': this.apiKey,
+          ...extraHeaders,
         },
-        body: body ? JSON.stringify(body) : undefined,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
         signal: controller.signal,
       });
 
       const text = await res.text();
-      const data = text ? JSON.parse(text) : undefined;
+      const data = text ? (JSON.parse(text) as unknown) : undefined;
 
       if (!res.ok) {
         throw new PingApiError(`Ping request failed: ${method} ${path}`, res.status, data);

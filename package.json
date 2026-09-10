@@ -9,6 +9,8 @@
     "build": "tsc -p tsconfig.build.json --pretty false",
     "start": "node dist/main.js",
     "dev": "ts-node-dev --respawn --transpile-only -r tsconfig-paths/register src/main.ts",
+    "dev:worker": "ts-node-dev --respawn --transpile-only -r tsconfig-paths/register src/workers/rms-events.worker.ts",
+    "worker": "node dist/workers/rms-events.worker.js",
     "start:prod": "node dist/main.js",
     "lint": "eslint . --max-warnings 0",
     "format": "prettier . --write",

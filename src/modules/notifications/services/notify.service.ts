@@ -4,21 +4,24 @@ export interface NotifyUserInput {
   userId: string;
   title: string;
   body: string;
-  deepLink?: string;
+  /** Absolute URI — required by Ping (e.g. miningmobile://home). */
+  deepLink: string;
   data?: Record<string, unknown>;
+  idempotencyKey?: string;
+  channelId?: string;
 }
 
-// Single call site every domain module (trip, credits, admin, ...) should
-// use to push a notification — keeps Ping as the only thing that talks to
-// Expo/FCM/APNs, and keeps that call out of business logic.
+// Single entry every domain module should use for push — keeps Ping out of business logic.
 export const notifyService = {
   async notifyUser(input: NotifyUserInput) {
     return pingClient.sendNotification({
-      userId: input.userId,
       title: input.title,
       body: input.body,
       deepLink: input.deepLink,
       data: input.data,
+      userIds: [input.userId],
+      channelId: input.channelId ?? 'default',
+      idempotencyKey: input.idempotencyKey,
     });
   },
 };
