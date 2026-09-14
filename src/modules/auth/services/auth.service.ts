@@ -15,6 +15,7 @@ import type {
   LoginOtpSendBody,
   LoginOtpVerifyBody,
   ResetMpinBody,
+  SignupEmailCheckBody,
   SignupOtpSendBody,
   SignupOtpVerifyBody,
   SignupSubmitBody,
@@ -47,8 +48,7 @@ class AuthService {
     const existing = await userRepository.findByPhoneE164(phoneE164);
 
     if (existing) {
-      // Privacy: respond success but skip OTP so callers cannot infer account existence.
-      return;
+      throw new AppError('This phone number is already registered', 409, ErrorCode.CONFLICT);
     }
 
     await otpService.sendOtp(phoneE164, OtpPurpose.SIGNUP);
@@ -57,6 +57,12 @@ class AuthService {
   async verifySignupOtp(input: SignupOtpVerifyBody): Promise<void> {
     const phoneE164 = resolvePhoneE164(input);
     await otpService.verifyOtp(phoneE164, OtpPurpose.SIGNUP, input.otp);
+  }
+
+  async checkSignupEmailAvailable(input: SignupEmailCheckBody): Promise<{ available: boolean }> {
+    const email = normalizeEmail(input.email);
+    const emailOwner = email ? await userRepository.findByEmail(email) : null;
+    return { available: !emailOwner };
   }
 
   async submitSignup(input: SignupSubmitBody): Promise<AuthSignupResultDto> {
@@ -69,11 +75,7 @@ class AuthService {
 
     const existing = await userRepository.findByPhoneE164(phoneE164);
     if (existing) {
-      throw new AppError(
-        'Unable to complete signup. Please verify your phone number and try again.',
-        400,
-        ErrorCode.VALIDATION_ERROR,
-      );
+      throw new AppError('This phone number is already registered', 409, ErrorCode.CONFLICT);
     }
 
     const email = normalizeEmail(input.email);

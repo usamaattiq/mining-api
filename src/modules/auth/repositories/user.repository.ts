@@ -16,6 +16,10 @@ class UserRepository {
     return tx.user.findFirst({ where: { id, deletedAt: null } });
   }
 
+  findByRmsId(rmsId: string, tx: Tx | typeof prisma = prisma): Promise<User | null> {
+    return tx.user.findFirst({ where: { rmsId, deletedAt: null } });
+  }
+
   create(
     data: {
       fullName: string;

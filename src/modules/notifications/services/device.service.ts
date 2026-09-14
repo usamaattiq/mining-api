@@ -1,11 +1,10 @@
 import { pingClient } from '../../../integrations/ping/ping.client';
 import { pushDeviceRepository } from '../repositories/push-device.repository';
 import type { RegisterDeviceInput } from '../validation/device.schema';
+import { toPingPlatform } from '../utils/ping-platform';
 
 export const deviceService = {
-  // Registers the token with Ping first (source of truth for delivery), then
-  // mirrors the mapping locally so mining-api knows which Ping device to
-  // unregister on logout without another round trip.
+  // Registers with Ping first (delivery source of truth), then mirrors locally.
   async registerDevice(userId: string, input: RegisterDeviceInput) {
     const existing = await pushDeviceRepository.findByToken(input.expoPushToken);
     if (existing?.pingDeviceId && existing.userId === userId && existing.isActive) {
@@ -14,7 +13,8 @@ export const deviceService = {
 
     const registered = await pingClient.registerDevice({
       userId,
-      platform: input.platform,
+      platform: toPingPlatform(input.platform),
+      pushToken: input.expoPushToken,
       expoPushToken: input.expoPushToken,
     });
 
@@ -33,8 +33,10 @@ export const deviceService = {
       return;
     }
 
-    if (device.pingDeviceId) {
-      await pingClient.unregisterDevice(device.pingDeviceId);
+    try {
+      await pingClient.unregisterDevice(expoPushToken);
+    } catch {
+      // Still deactivate locally if Ping already dropped the token.
     }
 
     await pushDeviceRepository.deactivate(expoPushToken);

@@ -15,6 +15,30 @@ const envSchema = z.object({
   PING_API_KEY: z.string().min(1, 'PING_API_KEY is required'),
   PING_API_TIMEOUT: z.coerce.number().default(30000),
 
+  // RFQ HTTP client (wired when RFQ service is configured)
+  RFQ_BASE_URL: z.string().optional(),
+  RFQ_API_KEY: z.string().optional(),
+  RFQ_API_TIMEOUT: z.coerce.number().default(30000),
+
+  // RFQ Pub/Sub consumer (RMS publishes facts to rfq-events; mining maps → Ping)
+  PUBSUB_ENABLED: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true'),
+  PUBSUB_PROJECT_ID: z.string().optional(),
+  /** Topic RMS publishes to (mining only subscribes; kept for docs/ops). */
+  PUBSUB_TOPIC_ID: z.string().default('rfq-events'),
+  PUBSUB_SUBSCRIPTION_ID: z.string().default('mining-api-rfq-events'),
+  /** Must match RFQ API key / RFQ platform_id and Pub/Sub subscription filter. */
+  RMS_PLATFORM_ID: z.string().default('mining'),
+  /**
+   * Path to GCP service-account JSON for Pub/Sub.
+   * Leave empty when using ADC / workload identity / emulator.
+   */
+  GOOGLE_APPLICATION_CREDENTIALS: z.string().optional(),
+  /** Set for local emulator, e.g. localhost:8086. Empty in production. */
+  PUBSUB_EMULATOR_HOST: z.string().optional(),
+
   // Auth
   JWT_SECRET: z.string().min(16, 'JWT_SECRET is required'),
   JWT_EXPIRES_IN: z.string().default('30d'),
@@ -27,6 +51,14 @@ const envSchema = z.object({
   MPIN_LOCKOUT_MINUTES: z.coerce.number().default(15),
   /** Comma-separated E.164 phone numbers exempt from the OTP send-rate-limit (testing/QA). */
   OTP_RATE_LIMIT_EXEMPT_PHONES: z.string().default(''),
+
+  // AWS S3 (uploads)
+  AWS_REGION: z.string().min(1, 'AWS_REGION is required'),
+  AWS_S3_BUCKET: z.string().min(1, 'AWS_S3_BUCKET is required'),
+  AWS_ACCESS_KEY_ID: z.string().min(1, 'AWS_ACCESS_KEY_ID is required'),
+  AWS_SECRET_ACCESS_KEY: z.string().min(1, 'AWS_SECRET_ACCESS_KEY is required'),
+  AWS_S3_PUBLIC_BASE_URL: z.string().url('AWS_S3_PUBLIC_BASE_URL must be a valid URL'),
+  S3_PRESIGN_EXPIRES_IN: z.coerce.number().default(300),
 
   // WhatsApp (OTP delivery)
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),

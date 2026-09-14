@@ -11,6 +11,7 @@ import {
   loginOtpVerifyBodySchema,
   logoutBodySchema,
   resetMpinBodySchema,
+  signupEmailCheckBodySchema,
   signupOtpSendBodySchema,
   signupOtpVerifyBodySchema,
   signupSubmitBodySchema,
@@ -31,6 +32,13 @@ authRoutes.post(
   authRateLimiter,
   validate(signupOtpVerifyBodySchema),
   wrap((req, res) => authController.verifySignupOtp(req, res)),
+);
+
+authRoutes.post(
+  '/signup/email/check',
+  authRateLimiter,
+  validate(signupEmailCheckBodySchema),
+  wrap((req, res) => authController.checkSignupEmail(req, res)),
 );
 
 authRoutes.post(
