@@ -18,11 +18,16 @@ class ListingRepository {
     return tx.listing.findUnique({ where: { id }, include: mediaInclude });
   }
 
-  findMine(input: { ownerId: string; category?: ListingCategory }): Promise<ListingWithMedia[]> {
+  findMine(input: {
+    ownerId: string;
+    postedAs?: MarketplaceRole;
+    category?: ListingCategory;
+  }): Promise<ListingWithMedia[]> {
     return prisma.listing.findMany({
       where: {
         ownerId: input.ownerId,
         status: 'ACTIVE',
+        ...(input.postedAs ? { postedAs: input.postedAs } : {}),
         ...(input.category ? { category: input.category } : {}),
       },
       include: {
@@ -34,12 +39,14 @@ class ListingRepository {
 
   findFeed(input: {
     postedAs: MarketplaceRole;
+    excludeOwnerId?: string;
     category?: ListingCategory;
   }): Promise<ListingWithMedia[]> {
     return prisma.listing.findMany({
       where: {
         postedAs: input.postedAs,
         status: 'ACTIVE',
+        ...(input.excludeOwnerId ? { ownerId: { not: input.excludeOwnerId } } : {}),
         ...(input.category ? { category: input.category } : {}),
       },
       include: {

@@ -63,6 +63,7 @@ export const createListingBodySchema = z.object({
 export const listListingsQuerySchema = z.object({
   query: z.object({
     category: z.enum(['equipment', 'services', 'gold']).optional(),
+    postedAs: z.enum(['buyer', 'supplier']).optional(),
   }),
 });
 

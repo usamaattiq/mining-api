@@ -24,7 +24,7 @@ export const listingController = {
 
   async listFeed(req: AuthenticatedRequest, res: Response) {
     const query = req.validatedQuery as ListFeedQuery;
-    const listings = await listingService.listFeed(query);
+    const listings = await listingService.listFeed(req.user!.id, query);
     sendSuccess(res, 200, listings);
   },
 

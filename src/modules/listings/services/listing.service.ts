@@ -107,14 +107,16 @@ class ListingService {
   async listMine(ownerId: string, query: ListListingsQuery): Promise<ListingDto[]> {
     const rows = await listingRepository.findMine({
       ownerId,
+      postedAs: query.postedAs,
       category: query.category,
     });
     return rows.map(toListingDto);
   }
 
-  async listFeed(query: ListFeedQuery): Promise<ListingDto[]> {
+  async listFeed(viewerId: string, query: ListFeedQuery): Promise<ListingDto[]> {
     const rows = await listingRepository.findFeed({
       postedAs: query.postedAs,
+      excludeOwnerId: viewerId,
       category: query.category,
     });
     return rows.map(toListingDto);
