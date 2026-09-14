@@ -4,18 +4,21 @@ import type { ListingWithMedia } from '../types/listing.types';
 
 type Tx = Prisma.TransactionClient;
 
-const mediaInclude = { media: { orderBy: { sortOrder: 'asc' as const } } };
+const listingInclude = {
+  media: { orderBy: { sortOrder: 'asc' as const } },
+  owner: { select: { id: true, fullName: true, avatarUrl: true } },
+};
 
 class ListingRepository {
   create(
     data: Prisma.ListingCreateInput,
     tx: Tx | typeof prisma = prisma,
   ): Promise<ListingWithMedia> {
-    return tx.listing.create({ data, include: mediaInclude });
+    return tx.listing.create({ data, include: listingInclude });
   }
 
   findById(id: string, tx: Tx | typeof prisma = prisma): Promise<ListingWithMedia | null> {
-    return tx.listing.findUnique({ where: { id }, include: mediaInclude });
+    return tx.listing.findUnique({ where: { id }, include: listingInclude });
   }
 
   findMine(input: {
@@ -32,6 +35,7 @@ class ListingRepository {
       },
       include: {
         media: { orderBy: { sortOrder: 'asc' }, take: 6 },
+        owner: { select: { id: true, fullName: true, avatarUrl: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -51,6 +55,7 @@ class ListingRepository {
       },
       include: {
         media: { orderBy: { sortOrder: 'asc' }, take: 6 },
+        owner: { select: { id: true, fullName: true, avatarUrl: true } },
       },
       orderBy: { createdAt: 'desc' },
     });

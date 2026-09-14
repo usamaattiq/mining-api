@@ -19,9 +19,18 @@ function toMediaDto(listing: ListingWithMedia): ListingMediaDto[] {
     }));
 }
 
+function toOwnerDto(listing: ListingWithMedia) {
+  return {
+    id: listing.owner.id,
+    fullName: listing.owner.fullName,
+    avatarUrl: listing.owner.avatarUrl,
+  };
+}
+
 export function toListingDto(listing: ListingWithMedia): ListingDto {
   const media = toMediaDto(listing);
   const createdAt = listing.createdAt.getTime();
+  const owner = toOwnerDto(listing);
 
   if (listing.category === 'equipment') {
     const dto: EquipmentListingDto = {
@@ -43,6 +52,7 @@ export function toListingDto(listing: ListingWithMedia): ListingDto {
       deliveryType: listing.deliveryType ?? 'free',
       deliveryPricePerKm: listing.deliveryPricePerKm ?? '',
       postedAs: listing.postedAs,
+      owner,
       createdAt,
     };
     return dto;
@@ -63,6 +73,7 @@ export function toListingDto(listing: ListingWithMedia): ListingDto {
       location: listing.location,
       media,
       postedAs: listing.postedAs,
+      owner,
       createdAt,
     };
     return dto;
@@ -81,6 +92,7 @@ export function toListingDto(listing: ListingWithMedia): ListingDto {
     location: listing.location,
     media,
     postedAs: listing.postedAs,
+    owner,
     createdAt,
   };
   return dto;
