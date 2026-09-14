@@ -161,11 +161,17 @@ enum NotificationTarget {
   HomeTab
 }
 
+enum MarketplaceRole {
+  buyer
+  supplier
+}
+
 model Listing {
   id        String          @id @default(uuid())
   ownerId   String
   category  ListingCategory
   status    ListingStatus   @default(ACTIVE)
+  postedAs  MarketplaceRole @default(supplier)
   title     String
   description String        @default("")
   location  String          @default("")
@@ -199,6 +205,7 @@ model Listing {
   conversations  Conversation[]
 
   @@index([ownerId, category, createdAt])
+  @@index([postedAs, category, createdAt])
   @@map("listings")
 }
 

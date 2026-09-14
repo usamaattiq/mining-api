@@ -42,6 +42,7 @@ export function toListingDto(listing: ListingWithMedia): ListingDto {
       deliveryAvailable: listing.deliveryAvailable ?? false,
       deliveryType: listing.deliveryType ?? 'free',
       deliveryPricePerKm: listing.deliveryPricePerKm ?? '',
+      postedAs: listing.postedAs,
       createdAt,
     };
     return dto;
@@ -61,6 +62,7 @@ export function toListingDto(listing: ListingWithMedia): ListingDto {
       serviceDate: listing.serviceDate ? listing.serviceDate.getTime() : null,
       location: listing.location,
       media,
+      postedAs: listing.postedAs,
       createdAt,
     };
     return dto;
@@ -78,6 +80,7 @@ export function toListingDto(listing: ListingWithMedia): ListingDto {
     auctionEndDate: listing.auctionEndDate ? listing.auctionEndDate.getTime() : null,
     location: listing.location,
     media,
+    postedAs: listing.postedAs,
     createdAt,
   };
   return dto;

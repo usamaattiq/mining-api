@@ -26,6 +26,7 @@ const equipmentBodySchema = z.object({
   deliveryAvailable: z.boolean().default(false),
   deliveryType: z.enum(['free', 'perKm']).default('free'),
   deliveryPricePerKm: z.string().trim().max(40).default(''),
+  postedAs: z.enum(['buyer', 'supplier']).default('supplier'),
 });
 
 const serviceBodySchema = z.object({
@@ -39,6 +40,7 @@ const serviceBodySchema = z.object({
   serviceDate: z.number().int().nullable().optional(),
   location: z.string().trim().max(500).default(''),
   media: mediaSchema,
+  postedAs: z.enum(['buyer', 'supplier']).default('supplier'),
 });
 
 const goldBodySchema = z.object({
@@ -51,6 +53,7 @@ const goldBodySchema = z.object({
   auctionEndDate: z.number().int().nullable().optional(),
   location: z.string().trim().max(500).default(''),
   media: mediaSchema,
+  postedAs: z.enum(['buyer', 'supplier']).default('supplier'),
 });
 
 export const createListingBodySchema = z.object({
@@ -69,6 +72,14 @@ export const listingIdParamsSchema = z.object({
   }),
 });
 
+export const listFeedQuerySchema = z.object({
+  query: z.object({
+    postedAs: z.enum(['buyer', 'supplier']),
+    category: z.enum(['equipment', 'services', 'gold']).optional(),
+  }),
+});
+
 export type CreateListingBody = z.infer<typeof createListingBodySchema>['body'];
 export type ListListingsQuery = z.infer<typeof listListingsQuerySchema>['query'];
+export type ListFeedQuery = z.infer<typeof listFeedQuerySchema>['query'];
 export type ListingIdParams = z.infer<typeof listingIdParamsSchema>['params'];

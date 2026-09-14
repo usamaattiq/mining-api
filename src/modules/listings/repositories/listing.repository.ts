@@ -1,4 +1,4 @@
-import type { ListingCategory, Prisma } from '@prisma/client';
+import type { ListingCategory, MarketplaceRole, Prisma } from '@prisma/client';
 import { prisma } from '../../../common/database/prisma';
 import type { ListingWithMedia } from '../types/listing.types';
 
@@ -22,6 +22,23 @@ class ListingRepository {
     return prisma.listing.findMany({
       where: {
         ownerId: input.ownerId,
+        status: 'ACTIVE',
+        ...(input.category ? { category: input.category } : {}),
+      },
+      include: {
+        media: { orderBy: { sortOrder: 'asc' }, take: 6 },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  findFeed(input: {
+    postedAs: MarketplaceRole;
+    category?: ListingCategory;
+  }): Promise<ListingWithMedia[]> {
+    return prisma.listing.findMany({
+      where: {
+        postedAs: input.postedAs,
         status: 'ACTIVE',
         ...(input.category ? { category: input.category } : {}),
       },

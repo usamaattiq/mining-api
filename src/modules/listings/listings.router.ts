@@ -6,6 +6,7 @@ import { listingController } from './controllers/listing.controller';
 import {
   createListingBodySchema,
   listingIdParamsSchema,
+  listFeedQuerySchema,
   listListingsQuerySchema,
 } from './validation/listing.schema';
 
@@ -17,6 +18,12 @@ listingsRouter.get(
   '/',
   validate(listListingsQuerySchema),
   wrap((req, res) => listingController.listMine(req, res)),
+);
+
+listingsRouter.get(
+  '/feed',
+  validate(listFeedQuerySchema),
+  wrap((req, res) => listingController.listFeed(req, res)),
 );
 
 listingsRouter.post(

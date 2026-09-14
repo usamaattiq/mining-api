@@ -6,7 +6,11 @@ import { inboxRepository } from '../../notifications/repositories/inbox.reposito
 import { listingRepository } from '../repositories/listing.repository';
 import type { ListingDto } from '../types/listing.types';
 import { toListingDto } from '../utils/listing.mapper';
-import type { CreateListingBody, ListListingsQuery } from '../validation/listing.schema';
+import type {
+  CreateListingBody,
+  ListFeedQuery,
+  ListListingsQuery,
+} from '../validation/listing.schema';
 
 function epochToDate(value: number | null | undefined): Date | null {
   if (value === undefined || value === null) return null;
@@ -42,6 +46,7 @@ function listingCreateData(ownerId: string, input: CreateListingBody): Prisma.Li
       deliveryAvailable: input.deliveryAvailable,
       deliveryType: input.deliveryType,
       deliveryPricePerKm: input.deliveryPricePerKm,
+      postedAs: input.postedAs,
       media,
     };
   }
@@ -58,6 +63,7 @@ function listingCreateData(ownerId: string, input: CreateListingBody): Prisma.Li
       yearsOfExperience: input.yearsOfExperience,
       price: input.price,
       serviceDate: epochToDate(input.serviceDate),
+      postedAs: input.postedAs,
       media,
     };
   }
@@ -72,6 +78,7 @@ function listingCreateData(ownerId: string, input: CreateListingBody): Prisma.Li
     purityLabel: input.purityLabel,
     price: input.price,
     auctionEndDate: epochToDate(input.auctionEndDate),
+    postedAs: input.postedAs,
     media,
   };
 }
@@ -100,6 +107,14 @@ class ListingService {
   async listMine(ownerId: string, query: ListListingsQuery): Promise<ListingDto[]> {
     const rows = await listingRepository.findMine({
       ownerId,
+      category: query.category,
+    });
+    return rows.map(toListingDto);
+  }
+
+  async listFeed(query: ListFeedQuery): Promise<ListingDto[]> {
+    const rows = await listingRepository.findFeed({
+      postedAs: query.postedAs,
       category: query.category,
     });
     return rows.map(toListingDto);

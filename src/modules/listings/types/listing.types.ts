@@ -28,6 +28,7 @@ export type EquipmentListingDto = {
   deliveryAvailable: boolean;
   deliveryType: 'free' | 'perKm';
   deliveryPricePerKm: string;
+  postedAs: 'buyer' | 'supplier';
   createdAt: number;
 };
 
@@ -44,6 +45,7 @@ export type ServiceListingDto = {
   serviceDate: number | null;
   location: string;
   media: ListingMediaDto[];
+  postedAs: 'buyer' | 'supplier';
   createdAt: number;
 };
 
@@ -59,6 +61,7 @@ export type GoldListingDto = {
   auctionEndDate: number | null;
   location: string;
   media: ListingMediaDto[];
+  postedAs: 'buyer' | 'supplier';
   createdAt: number;
 };
 
