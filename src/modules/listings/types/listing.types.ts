@@ -18,6 +18,14 @@ export type ListingOwnerDto = {
   avatarUrl: string | null;
 };
 
+export type ListingRfqOfferDto = {
+  id: string;
+  responderId: string;
+  responderName: string;
+  status: string;
+  price?: string;
+};
+
 export type ListingRfqDto = {
   id: string;
   status: string;
@@ -26,8 +34,10 @@ export type ListingRfqDto = {
   expiresAt: number | null;
   offersCount?: number;
   canSubmitOffer?: boolean;
+  canDecideOffers?: boolean;
   myOfferStatus?: string;
   myOfferPrice?: string;
+  offers?: ListingRfqOfferDto[];
 };
 
 export type EquipmentListingDto = {

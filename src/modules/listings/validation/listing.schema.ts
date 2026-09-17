@@ -96,4 +96,12 @@ export const submitListingOfferBodySchema = z.object({
   }),
 });
 
+export const listingOfferActionParamsSchema = z.object({
+  params: z.object({
+    id: z.string().uuid(),
+    offerId: z.string().uuid(),
+  }),
+});
+
 export type SubmitListingOfferBody = z.infer<typeof submitListingOfferBodySchema>['body'];
+export type ListingOfferActionParams = z.infer<typeof listingOfferActionParamsSchema>['params'];

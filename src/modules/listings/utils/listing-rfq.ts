@@ -1,10 +1,28 @@
 import { rfqClient } from '../../../integrations/rfq/rfq.client';
-import type { RfqSnapshot } from '../../../integrations/rfq/rfq.types';
+import type { RfqOfferSummary, RfqSnapshot } from '../../../integrations/rfq/rfq.types';
 import { listingRepository } from '../repositories/listing.repository';
-import type { ListingDto, ListingRfqDto, ListingWithMedia } from '../types/listing.types';
+import type {
+  ListingDto,
+  ListingRfqDto,
+  ListingRfqOfferDto,
+  ListingWithMedia,
+} from '../types/listing.types';
+
+function mapOffer(offer: RfqOfferSummary): ListingRfqOfferDto {
+  return {
+    id: String(offer.id),
+    responderId: String(offer.responder_id ?? offer.responderId ?? ''),
+    responderName: '',
+    status: offer.status,
+    ...(offer.price != null ? { price: String(offer.price) } : {}),
+  };
+}
 
 export function toListingRfqDto(snapshot: RfqSnapshot): ListingRfqDto {
-  const offersCount = snapshot.offers?.length ?? snapshot.my_offers?.length ?? undefined;
+  const ownerOffers = (snapshot.offers ?? []).map(mapOffer);
+  const myOffers = (snapshot.my_offers ?? []).map(mapOffer);
+  const offers = ownerOffers.length > 0 ? ownerOffers : undefined;
+  const offersCount = ownerOffers.length || myOffers.length || undefined;
   const myOffer =
     snapshot.my_offers?.find((offer) =>
       ['active', 'selected', 'confirmed'].includes(offer.status),
@@ -17,12 +35,14 @@ export function toListingRfqDto(snapshot: RfqSnapshot): ListingRfqDto {
     expiresAt: snapshot.expires_at ? new Date(snapshot.expires_at).getTime() : null,
     ...(offersCount !== undefined ? { offersCount } : {}),
     canSubmitOffer: snapshot.actions?.can_submit_offer,
+    canDecideOffers: snapshot.actions?.can_select,
     ...(myOffer
       ? {
           myOfferStatus: myOffer.status,
           myOfferPrice: myOffer.price != null ? String(myOffer.price) : undefined,
         }
       : {}),
+    ...(offers ? { offers } : {}),
   };
 }
 

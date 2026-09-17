@@ -1,5 +1,10 @@
 import { env } from '../../config/env';
-import type { CreateRfqInput, RfqSnapshot, SubmitRfqOfferInput } from './rfq.types';
+import type {
+  CreateRfqInput,
+  DecideRfqOfferInput,
+  RfqSnapshot,
+  SubmitRfqOfferInput,
+} from './rfq.types';
 
 export class RfqApiError extends Error {
   constructor(
@@ -55,6 +60,15 @@ class RfqClient {
         ...(input.offeredQuantity != null ? { offered_quantity: input.offeredQuantity } : {}),
       },
       { 'X-Responder-Id': input.responderId },
+    );
+  }
+
+  async decideOffer(input: DecideRfqOfferInput): Promise<RfqSnapshot> {
+    return this.request<RfqSnapshot>(
+      'POST',
+      `/rfqs/${input.rfqId}/offers/${input.offerId}/${input.action}`,
+      {},
+      { 'X-Responder-Id': input.ownerId },
     );
   }
 

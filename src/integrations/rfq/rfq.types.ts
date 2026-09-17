@@ -1,5 +1,14 @@
 export type RfqStatusVariant = 'muted' | 'accent' | 'warning' | 'success';
 
+export type RfqOfferSummary = {
+  id: string;
+  responder_id?: string;
+  responderId?: string;
+  status: string;
+  price?: string | number | null;
+  offered_quantity?: string | number | null;
+};
+
 export type RfqSnapshot = {
   id: string;
   role?: 'public' | 'owner' | 'responder';
@@ -7,21 +16,15 @@ export type RfqSnapshot = {
   status_label: string;
   status_variant: RfqStatusVariant;
   expires_at?: string | null;
-  offers?: unknown[];
+  offers?: RfqOfferSummary[];
   my_offers?: RfqOfferSummary[];
   actions?: {
     can_submit_offer?: boolean;
+    can_select?: boolean;
     can_withdraw?: boolean;
     can_confirm?: boolean;
     can_decline?: boolean;
   };
-};
-
-export type RfqOfferSummary = {
-  id: string;
-  status: string;
-  price?: string | number | null;
-  offered_quantity?: string | number | null;
 };
 
 export type CreateRfqInput = {
@@ -38,4 +41,11 @@ export type SubmitRfqOfferInput = {
   price: number;
   offeredQuantity?: number;
   capacityMode?: 'full' | 'partial';
+};
+
+export type DecideRfqOfferInput = {
+  rfqId: string;
+  offerId: string;
+  ownerId: string;
+  action: 'accept' | 'reject';
 };

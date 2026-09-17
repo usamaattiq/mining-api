@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import { prisma } from '../../../common/database/prisma';
 import { runInTransaction } from '../../../common/database/transaction';
 import { AppError } from '../../../common/errors/app-error';
 import { ErrorCode } from '../../../common/errors/error-codes';
@@ -15,6 +16,42 @@ import type {
   ListListingsQuery,
   SubmitListingOfferBody,
 } from '../validation/listing.schema';
+
+function mapRfqError(error: unknown, fallback: string): never {
+  if (error instanceof RfqApiError) {
+    const detail =
+      error.body && typeof error.body === 'object' && 'detail' in error.body
+        ? String((error.body as { detail: unknown }).detail)
+        : fallback;
+    throw new AppError(
+      detail,
+      error.status >= 400 && error.status < 500 ? error.status : 400,
+      ErrorCode.VALIDATION_ERROR,
+    );
+  }
+  throw error;
+}
+
+async function withOfferNames(listing: ListingDto): Promise<ListingDto> {
+  if (listing.category === 'gold' || !listing.rfq?.offers?.length) return listing;
+  const ids = [...new Set(listing.rfq.offers.map((offer) => offer.responderId).filter(Boolean))];
+  if (ids.length === 0) return listing;
+  const users = await prisma.user.findMany({
+    where: { id: { in: ids }, deletedAt: null },
+    select: { id: true, fullName: true },
+  });
+  const names = new Map(users.map((user) => [user.id, user.fullName]));
+  return {
+    ...listing,
+    rfq: {
+      ...listing.rfq,
+      offers: listing.rfq.offers.map((offer) => ({
+        ...offer,
+        responderName: names.get(offer.responderId) || offer.responderName || 'Buyer',
+      })),
+    },
+  };
+}
 
 function epochToDate(value: number | null | undefined): Date | null {
   if (value === undefined || value === null) return null;
@@ -144,7 +181,7 @@ class ListingService {
       throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
     }
     const [dto] = await attachRfqStatuses([toListingDto(listing)], [listing], viewerId);
-    return dto;
+    return withOfferNames(dto);
   }
 
   async submitOffer(
@@ -182,21 +219,45 @@ class ListingService {
         capacityMode: 'full',
       });
     } catch (error) {
-      if (error instanceof RfqApiError) {
-        const detail =
-          error.body && typeof error.body === 'object' && 'detail' in error.body
-            ? String((error.body as { detail: unknown }).detail)
-            : 'Could not submit offer';
-        throw new AppError(
-          detail,
-          error.status >= 400 && error.status < 500 ? error.status : 400,
-          ErrorCode.VALIDATION_ERROR,
-        );
-      }
-      throw error;
+      mapRfqError(error, 'Could not submit offer');
     }
 
     return this.getById(listingId, viewerId);
+  }
+
+  async decideOffer(
+    listingId: string,
+    ownerId: string,
+    offerId: string,
+    action: 'accept' | 'reject',
+  ): Promise<ListingDto> {
+    const listing = await listingRepository.findById(listingId);
+    if (!listing || listing.status !== 'ACTIVE') {
+      throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
+    }
+    if (listing.ownerId !== ownerId) {
+      throw new AppError('Only the listing owner can decide offers', 403, ErrorCode.FORBIDDEN);
+    }
+    if (!listing.rfqId) {
+      throw new AppError(
+        'Offers are not available for this listing',
+        400,
+        ErrorCode.VALIDATION_ERROR,
+      );
+    }
+
+    try {
+      await rfqClient.decideOffer({
+        rfqId: listing.rfqId,
+        offerId,
+        ownerId,
+        action,
+      });
+    } catch (error) {
+      mapRfqError(error, `Could not ${action} offer`);
+    }
+
+    return this.getById(listingId, ownerId);
   }
 }
 

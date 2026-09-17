@@ -6,6 +6,7 @@ import { listingController } from './controllers/listing.controller';
 import {
   createListingBodySchema,
   listingIdParamsSchema,
+  listingOfferActionParamsSchema,
   listFeedQuerySchema,
   listListingsQuerySchema,
   submitListingOfferBodySchema,
@@ -31,6 +32,18 @@ listingsRouter.post(
   '/',
   validate(createListingBodySchema),
   wrap((req, res) => listingController.create(req, res)),
+);
+
+listingsRouter.post(
+  '/:id/offers/:offerId/accept',
+  validate(listingOfferActionParamsSchema),
+  wrap((req, res) => listingController.acceptOffer(req, res)),
+);
+
+listingsRouter.post(
+  '/:id/offers/:offerId/reject',
+  validate(listingOfferActionParamsSchema),
+  wrap((req, res) => listingController.rejectOffer(req, res)),
 );
 
 listingsRouter.post(

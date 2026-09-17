@@ -5,6 +5,7 @@ import { listingService } from '../services/listing.service';
 import type {
   CreateListingBody,
   ListingIdParams,
+  ListingOfferActionParams,
   ListFeedQuery,
   ListListingsQuery,
   SubmitListingOfferBody,
@@ -40,5 +41,27 @@ export const listingController = {
     const body = req.validatedBody as SubmitListingOfferBody;
     const listing = await listingService.submitOffer(params.id, req.user!.id, body);
     sendSuccess(res, 201, listing);
+  },
+
+  async acceptOffer(req: AuthenticatedRequest, res: Response) {
+    const params = req.validatedParams as ListingOfferActionParams;
+    const listing = await listingService.decideOffer(
+      params.id,
+      req.user!.id,
+      params.offerId,
+      'accept',
+    );
+    sendSuccess(res, 200, listing);
+  },
+
+  async rejectOffer(req: AuthenticatedRequest, res: Response) {
+    const params = req.validatedParams as ListingOfferActionParams;
+    const listing = await listingService.decideOffer(
+      params.id,
+      req.user!.id,
+      params.offerId,
+      'reject',
+    );
+    sendSuccess(res, 200, listing);
   },
 };
