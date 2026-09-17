@@ -7,6 +7,7 @@ import type {
   ListingIdParams,
   ListFeedQuery,
   ListListingsQuery,
+  SubmitListingOfferBody,
 } from '../validation/listing.schema';
 
 export const listingController = {
@@ -30,7 +31,14 @@ export const listingController = {
 
   async getById(req: AuthenticatedRequest, res: Response) {
     const params = req.validatedParams as ListingIdParams;
-    const listing = await listingService.getById(params.id);
+    const listing = await listingService.getById(params.id, req.user!.id);
     sendSuccess(res, 200, listing);
+  },
+
+  async submitOffer(req: AuthenticatedRequest, res: Response) {
+    const params = req.validatedParams as ListingIdParams;
+    const body = req.validatedBody as SubmitListingOfferBody;
+    const listing = await listingService.submitOffer(params.id, req.user!.id, body);
+    sendSuccess(res, 201, listing);
   },
 };

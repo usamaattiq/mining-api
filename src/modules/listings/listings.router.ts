@@ -8,6 +8,7 @@ import {
   listingIdParamsSchema,
   listFeedQuerySchema,
   listListingsQuerySchema,
+  submitListingOfferBodySchema,
 } from './validation/listing.schema';
 
 export const listingsRouter = Router();
@@ -30,6 +31,12 @@ listingsRouter.post(
   '/',
   validate(createListingBodySchema),
   wrap((req, res) => listingController.create(req, res)),
+);
+
+listingsRouter.post(
+  '/:id/offers',
+  validate(listingIdParamsSchema.merge(submitListingOfferBodySchema)),
+  wrap((req, res) => listingController.submitOffer(req, res)),
 );
 
 listingsRouter.get(

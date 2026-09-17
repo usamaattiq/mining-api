@@ -18,6 +18,18 @@ export type ListingOwnerDto = {
   avatarUrl: string | null;
 };
 
+export type ListingRfqDto = {
+  id: string;
+  status: string;
+  statusLabel: string;
+  statusVariant: 'muted' | 'accent' | 'warning' | 'success';
+  expiresAt: number | null;
+  offersCount?: number;
+  canSubmitOffer?: boolean;
+  myOfferStatus?: string;
+  myOfferPrice?: string;
+};
+
 export type EquipmentListingDto = {
   id: string;
   ownerId: string;
@@ -39,6 +51,7 @@ export type EquipmentListingDto = {
   postedAs: 'buyer' | 'supplier';
   owner: ListingOwnerDto;
   createdAt: number;
+  rfq?: ListingRfqDto;
 };
 
 export type ServiceListingDto = {
@@ -57,6 +70,7 @@ export type ServiceListingDto = {
   postedAs: 'buyer' | 'supplier';
   owner: ListingOwnerDto;
   createdAt: number;
+  rfq?: ListingRfqDto;
 };
 
 export type GoldListingDto = {

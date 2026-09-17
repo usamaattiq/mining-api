@@ -2,15 +2,18 @@ import type { Prisma } from '@prisma/client';
 import { runInTransaction } from '../../../common/database/transaction';
 import { AppError } from '../../../common/errors/app-error';
 import { ErrorCode } from '../../../common/errors/error-codes';
+import { rfqClient, RfqApiError } from '../../../integrations/rfq/rfq.client';
 import { inboxRepository } from '../../notifications/repositories/inbox.repository';
 import { notifyService } from '../../notifications/services/notify.service';
 import { listingRepository } from '../repositories/listing.repository';
 import type { ListingDto } from '../types/listing.types';
+import { attachRfqStatuses, createListingRfq, withRfq } from '../utils/listing-rfq';
 import { toListingDto } from '../utils/listing.mapper';
 import type {
   CreateListingBody,
   ListFeedQuery,
   ListListingsQuery,
+  SubmitListingOfferBody,
 } from '../validation/listing.schema';
 
 function epochToDate(value: number | null | undefined): Date | null {
@@ -113,7 +116,8 @@ class ListingService {
       })
       .catch(() => undefined);
 
-    return toListingDto(listing);
+    const { listing: withRfqRow, snapshot } = await createListingRfq(listing);
+    return withRfq(toListingDto(withRfqRow), snapshot);
   }
 
   async listMine(ownerId: string, query: ListListingsQuery): Promise<ListingDto[]> {
@@ -122,7 +126,7 @@ class ListingService {
       postedAs: query.postedAs,
       category: query.category,
     });
-    return rows.map(toListingDto);
+    return attachRfqStatuses(rows.map(toListingDto), rows, ownerId);
   }
 
   async listFeed(viewerId: string, query: ListFeedQuery): Promise<ListingDto[]> {
@@ -131,15 +135,68 @@ class ListingService {
       excludeOwnerId: viewerId,
       category: query.category,
     });
-    return rows.map(toListingDto);
+    return attachRfqStatuses(rows.map(toListingDto), rows, viewerId);
   }
 
-  async getById(id: string): Promise<ListingDto> {
+  async getById(id: string, viewerId: string): Promise<ListingDto> {
     const listing = await listingRepository.findById(id);
     if (!listing || listing.status !== 'ACTIVE') {
       throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
     }
-    return toListingDto(listing);
+    const [dto] = await attachRfqStatuses([toListingDto(listing)], [listing], viewerId);
+    return dto;
+  }
+
+  async submitOffer(
+    listingId: string,
+    viewerId: string,
+    input: SubmitListingOfferBody,
+  ): Promise<ListingDto> {
+    const listing = await listingRepository.findById(listingId);
+    if (!listing || listing.status !== 'ACTIVE') {
+      throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
+    }
+    if (listing.category === 'gold' || !listing.rfqId) {
+      throw new AppError(
+        'Offers are not available for this listing',
+        400,
+        ErrorCode.VALIDATION_ERROR,
+      );
+    }
+    if (listing.ownerId === viewerId) {
+      throw new AppError('You cannot offer on your own listing', 400, ErrorCode.FORBIDDEN);
+    }
+    if (listing.postedAs !== 'supplier') {
+      throw new AppError(
+        'Only supplier listings accept buyer offers',
+        400,
+        ErrorCode.VALIDATION_ERROR,
+      );
+    }
+
+    try {
+      await rfqClient.submitOffer({
+        rfqId: listing.rfqId,
+        responderId: viewerId,
+        price: Number(input.price),
+        capacityMode: 'full',
+      });
+    } catch (error) {
+      if (error instanceof RfqApiError) {
+        const detail =
+          error.body && typeof error.body === 'object' && 'detail' in error.body
+            ? String((error.body as { detail: unknown }).detail)
+            : 'Could not submit offer';
+        throw new AppError(
+          detail,
+          error.status >= 400 && error.status < 500 ? error.status : 400,
+          ErrorCode.VALIDATION_ERROR,
+        );
+      }
+      throw error;
+    }
+
+    return this.getById(listingId, viewerId);
   }
 }
 

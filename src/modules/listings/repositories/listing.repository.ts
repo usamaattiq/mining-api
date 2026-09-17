@@ -21,6 +21,14 @@ class ListingRepository {
     return tx.listing.findUnique({ where: { id }, include: listingInclude });
   }
 
+  setRfqId(id: string, rfqId: string, tx: Tx | typeof prisma = prisma): Promise<ListingWithMedia> {
+    return tx.listing.update({
+      where: { id },
+      data: { rfqId },
+      include: listingInclude,
+    });
+  }
+
   findMine(input: {
     ownerId: string;
     postedAs?: MarketplaceRole;
