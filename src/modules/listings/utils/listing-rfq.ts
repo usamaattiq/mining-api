@@ -5,7 +5,10 @@ import type { ListingDto, ListingRfqDto, ListingWithMedia } from '../types/listi
 
 export function toListingRfqDto(snapshot: RfqSnapshot): ListingRfqDto {
   const offersCount = snapshot.offers?.length ?? snapshot.my_offers?.length ?? undefined;
-  const myOffer = snapshot.my_offers?.[0];
+  const myOffer =
+    snapshot.my_offers?.find((offer) =>
+      ['active', 'selected', 'confirmed'].includes(offer.status),
+    ) ?? snapshot.my_offers?.[0];
   return {
     id: snapshot.id,
     status: snapshot.status,
@@ -24,8 +27,19 @@ export function toListingRfqDto(snapshot: RfqSnapshot): ListingRfqDto {
 }
 
 export function withRfq(listing: ListingDto, snapshot: RfqSnapshot | undefined): ListingDto {
-  if (!snapshot || listing.category === 'gold') return listing;
+  if (listing.category === 'gold') return listing;
+  if (!snapshot) return listing;
   return { ...listing, rfq: toListingRfqDto(snapshot) };
+}
+
+function fallbackSnapshot(rfqId: string): RfqSnapshot {
+  return {
+    id: rfqId,
+    status: 'live',
+    status_label: 'Live',
+    status_variant: 'accent',
+    actions: { can_submit_offer: true },
+  };
 }
 
 export async function attachRfqStatuses(
@@ -33,20 +47,21 @@ export async function attachRfqStatuses(
   rows: ListingWithMedia[],
   viewerId: string,
 ): Promise<ListingDto[]> {
-  if (!rfqClient.isConfigured()) return listings;
+  const byListingId = new Map(
+    rows
+      .filter((row) => row.category !== 'gold' && row.rfqId)
+      .map((row) => [row.id, row.rfqId as string]),
+  );
+  if (byListingId.size === 0) return listings;
 
-  const rfqIds = rows
-    .filter((row) => row.category !== 'gold' && row.rfqId)
-    .map((row) => row.rfqId as string);
-  if (rfqIds.length === 0) return listings;
-
-  const snapshots = await rfqClient.getSnapshots(rfqIds, viewerId);
-  const byListingId = new Map(rows.map((row) => [row.id, row.rfqId]));
+  const snapshots = rfqClient.isConfigured()
+    ? await rfqClient.getSnapshots([...byListingId.values()], viewerId)
+    : new Map<string, RfqSnapshot>();
 
   return listings.map((listing) => {
     const rfqId = byListingId.get(listing.id);
     if (!rfqId) return listing;
-    return withRfq(listing, snapshots.get(rfqId));
+    return withRfq(listing, snapshots.get(rfqId) ?? fallbackSnapshot(rfqId));
   });
 }
 
