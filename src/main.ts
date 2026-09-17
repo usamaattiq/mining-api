@@ -2,12 +2,14 @@ import 'dotenv/config';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
+import http from 'http';
 import pino from 'pino';
 import { notificationsRouter } from './modules/notifications/notifications.router';
 import { authRoutes } from './modules/auth/auth.routes';
 import { listingsRouter } from './modules/listings/listings.router';
 import { messagesRouter } from './modules/messages/messages.router';
 import { uploadsRouter } from './modules/uploads/uploads.router';
+import { initChatSocket } from './realtime/chat.socket';
 
 const logger = pino({
   transport: process.env.NODE_ENV !== 'production' ? { target: 'pino-pretty' } : undefined,
@@ -37,6 +39,9 @@ app.use('/api/uploads', uploadsRouter);
 const port = Number(process.env.PORT ?? 4000);
 const host = process.env.HOST ?? '0.0.0.0';
 
-app.listen(port, host, () => {
+const server = http.createServer(app);
+initChatSocket(server);
+
+server.listen(port, host, () => {
   logger.info(`mining-api listening on http://${host}:${port}`);
 });

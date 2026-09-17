@@ -5,6 +5,8 @@ const ALLOWED_CONTENT_TYPES = {
   'image/png': 'png',
   'image/webp': 'webp',
   'application/pdf': 'pdf',
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
 } as const;
 
 export type AllowedContentType = keyof typeof ALLOWED_CONTENT_TYPES;

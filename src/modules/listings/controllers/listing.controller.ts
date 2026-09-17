@@ -5,6 +5,7 @@ import { listingService } from '../services/listing.service';
 import type {
   CreateListingBody,
   ListingIdParams,
+  ListFeedQuery,
   ListListingsQuery,
 } from '../validation/listing.schema';
 
@@ -18,6 +19,12 @@ export const listingController = {
   async listMine(req: AuthenticatedRequest, res: Response) {
     const query = (req.validatedQuery as ListListingsQuery | undefined) ?? {};
     const listings = await listingService.listMine(req.user!.id, query);
+    sendSuccess(res, 200, listings);
+  },
+
+  async listFeed(req: AuthenticatedRequest, res: Response) {
+    const query = req.validatedQuery as ListFeedQuery;
+    const listings = await listingService.listFeed(req.user!.id, query);
     sendSuccess(res, 200, listings);
   },
 

@@ -5,7 +5,7 @@ import { prisma } from '../../../common/database/prisma';
 type Tx = Prisma.TransactionClient;
 
 export type ConversationWithRelations = Conversation & {
-  listing: { id: string; title: string };
+  listing: { id: string; title: string; category: 'equipment' | 'services' | 'gold' };
   buyer: Pick<User, 'id' | 'fullName'>;
   seller: Pick<User, 'id' | 'fullName'>;
   messages: Message[];
@@ -13,7 +13,7 @@ export type ConversationWithRelations = Conversation & {
 };
 
 const conversationInclude = {
-  listing: { select: { id: true, title: true } },
+  listing: { select: { id: true, title: true, category: true } },
   buyer: { select: { id: true, fullName: true } },
   seller: { select: { id: true, fullName: true } },
   messages: { orderBy: { createdAt: 'asc' as const } },
@@ -21,7 +21,7 @@ const conversationInclude = {
 };
 
 const conversationListInclude = {
-  listing: { select: { id: true, title: true } },
+  listing: { select: { id: true, title: true, category: true } },
   buyer: { select: { id: true, fullName: true } },
   seller: { select: { id: true, fullName: true } },
   messages: { orderBy: { createdAt: 'desc' as const }, take: 1 },

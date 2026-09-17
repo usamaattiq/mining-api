@@ -8,6 +8,7 @@ import { conversationRepository } from '../repositories/conversation.repository'
 import { messageRepository } from '../repositories/message.repository';
 import type { ConversationDto } from '../types/message.types';
 import { toConversationDto } from '../utils/conversation.mapper';
+import { emitChatMessage } from '../../../realtime/chat.emitter';
 
 function assertParticipant(buyerId: string, sellerId: string, userId: string): void {
   if (buyerId !== userId && sellerId !== userId) {
@@ -71,7 +72,10 @@ class MessageService {
       conversation.buyerId === userId ? conversation.sellerId : conversation.buyerId;
 
     const updated = await runInTransaction(async (tx) => {
-      await messageRepository.create({ conversationId, senderId: userId, text }, tx);
+      const created = await messageRepository.create(
+        { conversationId, senderId: userId, text },
+        tx,
+      );
       await conversationRepository.touch(conversationId, tx);
       await conversationRepository.upsertReceipt(conversationId, userId, new Date(), tx);
       await inboxRepository.create(
@@ -86,12 +90,23 @@ class MessageService {
         },
         tx,
       );
-      return conversationRepository.findById(conversationId, tx);
+      return { row: await conversationRepository.findById(conversationId, tx), created };
     });
 
-    if (!updated) {
+    if (!updated.row) {
       throw new AppError('Conversation not found', 404, ErrorCode.NOT_FOUND);
     }
+
+    emitChatMessage(conversation.buyerId, conversation.sellerId, {
+      conversationId,
+      senderId: userId,
+      listingTitle: updated.row.listing.title,
+      message: {
+        id: updated.created.id,
+        text: updated.created.text,
+        sentAt: updated.created.createdAt.getTime(),
+      },
+    });
 
     void notifyService
       .notifyUser({
@@ -100,11 +115,11 @@ class MessageService {
         body: text.slice(0, 120),
         deepLink: `miningmobile://conversation/${conversationId}`,
         data: { conversationId, listingId: conversation.listingId },
-        idempotencyKey: `message-${updated.messages.at(-1)?.id ?? conversationId}`,
+        idempotencyKey: `message-${updated.created.id}`,
       })
       .catch(() => undefined);
 
-    return toConversationDto(updated, userId);
+    return toConversationDto(updated.row, userId);
   }
 
   async markRead(userId: string, conversationId: string): Promise<ConversationDto> {

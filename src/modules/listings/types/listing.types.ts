@@ -1,6 +1,8 @@
-import type { Listing, ListingMedia } from '@prisma/client';
+import type { Listing, ListingMedia, User } from '@prisma/client';
 
-export type ListingWithMedia = Listing & { media: ListingMedia[] };
+export type ListingOwnerPreview = Pick<User, 'id' | 'fullName' | 'avatarUrl'>;
+
+export type ListingWithMedia = Listing & { media: ListingMedia[]; owner: ListingOwnerPreview };
 
 export type ListingMediaDto = {
   id: string;
@@ -8,6 +10,12 @@ export type ListingMediaDto = {
   kind: 'photo' | 'video' | 'document';
   name?: string;
   key?: string;
+};
+
+export type ListingOwnerDto = {
+  id: string;
+  fullName: string;
+  avatarUrl: string | null;
 };
 
 export type EquipmentListingDto = {
@@ -28,6 +36,8 @@ export type EquipmentListingDto = {
   deliveryAvailable: boolean;
   deliveryType: 'free' | 'perKm';
   deliveryPricePerKm: string;
+  postedAs: 'buyer' | 'supplier';
+  owner: ListingOwnerDto;
   createdAt: number;
 };
 
@@ -44,6 +54,8 @@ export type ServiceListingDto = {
   serviceDate: number | null;
   location: string;
   media: ListingMediaDto[];
+  postedAs: 'buyer' | 'supplier';
+  owner: ListingOwnerDto;
   createdAt: number;
 };
 
@@ -59,6 +71,8 @@ export type GoldListingDto = {
   auctionEndDate: number | null;
   location: string;
   media: ListingMediaDto[];
+  postedAs: 'buyer' | 'supplier';
+  owner: ListingOwnerDto;
   createdAt: number;
 };
 

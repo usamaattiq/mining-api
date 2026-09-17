@@ -14,7 +14,22 @@ const OTP_SEND_WINDOW_MS = 10 * 60 * 1000;
 const VERIFIED_OTP_MAX_AGE_MS = 30 * 60 * 1000;
 const DEV_OTP_CODE = '000000';
 
-function generateOtpCode(): string {
+function parsePhoneList(value: string): string[] {
+  return value
+    .split(',')
+    .map((phone) => phone.trim())
+    .filter(Boolean);
+}
+
+function isReviewOtpPhone(phoneE164: string): boolean {
+  return parsePhoneList(env.REVIEW_OTP_PHONES).includes(phoneE164);
+}
+
+function generateOtpCode(phoneE164: string): string {
+  if (isReviewOtpPhone(phoneE164)) {
+    return env.REVIEW_OTP_CODE;
+  }
+
   if (!env.OTP_REAL_ENABLED) {
     return DEV_OTP_CODE;
   }
@@ -23,10 +38,10 @@ function generateOtpCode(): string {
 }
 
 function isRateLimitExemptPhone(phoneE164: string): boolean {
-  return env.OTP_RATE_LIMIT_EXEMPT_PHONES.split(',')
-    .map((phone) => phone.trim())
-    .filter(Boolean)
-    .includes(phoneE164);
+  return (
+    isReviewOtpPhone(phoneE164) ||
+    parsePhoneList(env.OTP_RATE_LIMIT_EXEMPT_PHONES).includes(phoneE164)
+  );
 }
 
 class OtpService {
@@ -46,14 +61,14 @@ class OtpService {
       );
     }
 
-    const code = generateOtpCode();
+    const code = generateOtpCode(phoneE164);
     const codeHash = await hashSecret(code);
     const expiresAt = new Date(Date.now() + env.OTP_EXPIRES_MINUTES * 60 * 1000);
 
     await otpChallengeRepository.create({ phoneE164, purpose, codeHash, expiresAt });
 
-    if (!env.OTP_REAL_ENABLED) {
-      // No SMS/WhatsApp provider wired up yet — log so dev/test can read the code.
+    if (isReviewOtpPhone(phoneE164) || !env.OTP_REAL_ENABLED) {
+      // Review / local: do not send WhatsApp. Reviewers use the fixed code.
       console.info(`[otp] ${purpose} code for ${phoneE164}: ${code}`);
       return;
     }
@@ -67,6 +82,25 @@ class OtpService {
   }
 
   async verifyOtp(phoneE164: string, purpose: OtpPurpose, otp: string): Promise<void> {
+    if (isReviewOtpPhone(phoneE164) && otp === env.REVIEW_OTP_CODE) {
+      const existing = await otpChallengeRepository.findLatest(phoneE164, purpose);
+      if (existing && !existing.verifiedAt) {
+        await otpChallengeRepository.markVerified(existing.id);
+        return;
+      }
+
+      const codeHash = await hashSecret(otp);
+      const expiresAt = new Date(Date.now() + env.OTP_EXPIRES_MINUTES * 60 * 1000);
+      const created = await otpChallengeRepository.create({
+        phoneE164,
+        purpose,
+        codeHash,
+        expiresAt,
+      });
+      await otpChallengeRepository.markVerified(created.id);
+      return;
+    }
+
     const challenge = await otpChallengeRepository.findLatest(phoneE164, purpose);
 
     if (!challenge || challenge.verifiedAt) {

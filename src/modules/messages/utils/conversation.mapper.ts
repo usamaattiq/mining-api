@@ -31,6 +31,7 @@ export function toConversationDto(
     id: conversation.id,
     listingId: conversation.listingId,
     listingTitle: conversation.listing.title,
+    listingCategory: conversation.listing.category,
     participantName: counterpart.fullName,
     unreadCount,
     messages,
