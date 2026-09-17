@@ -28,6 +28,11 @@ listingsRouter.get(
   wrap((req, res) => listingController.listFeed(req, res)),
 );
 
+listingsRouter.get(
+  '/my-offers',
+  wrap((req, res) => listingController.listMyOffers(req, res)),
+);
+
 listingsRouter.post(
   '/',
   validate(createListingBodySchema),
@@ -44,6 +49,18 @@ listingsRouter.post(
   '/:id/offers/:offerId/reject',
   validate(listingOfferActionParamsSchema),
   wrap((req, res) => listingController.rejectOffer(req, res)),
+);
+
+listingsRouter.post(
+  '/:id/offers/:offerId/confirm',
+  validate(listingOfferActionParamsSchema),
+  wrap((req, res) => listingController.confirmOffer(req, res)),
+);
+
+listingsRouter.post(
+  '/:id/offers/:offerId/decline',
+  validate(listingOfferActionParamsSchema),
+  wrap((req, res) => listingController.declineOffer(req, res)),
 );
 
 listingsRouter.post(

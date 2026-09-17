@@ -35,6 +35,9 @@ export type ListingRfqDto = {
   offersCount?: number;
   canSubmitOffer?: boolean;
   canDecideOffers?: boolean;
+  canConfirmOffer?: boolean;
+  canDeclineOffer?: boolean;
+  myOfferId?: string;
   myOfferStatus?: string;
   myOfferPrice?: string;
   offers?: ListingRfqOfferDto[];

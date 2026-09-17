@@ -8,6 +8,22 @@ import type {
   ListingWithMedia,
 } from '../types/listing.types';
 
+export const ATTACHED_OFFER_STATUSES = new Set(['active', 'selected', 'confirmed']);
+
+export function snapshotHasAttachedOffer(snapshot: RfqSnapshot): boolean {
+  return (snapshot.my_offers ?? []).some((offer) => ATTACHED_OFFER_STATUSES.has(offer.status));
+}
+
+export async function attachedRfqIdsForViewer(viewerId: string): Promise<Set<string>> {
+  if (!rfqClient.isConfigured()) return new Set();
+  try {
+    const snapshots = await rfqClient.listForResponder(viewerId);
+    return new Set(snapshots.filter(snapshotHasAttachedOffer).map((snapshot) => snapshot.id));
+  } catch {
+    return new Set();
+  }
+}
+
 function mapOffer(offer: RfqOfferSummary): ListingRfqOfferDto {
   return {
     id: String(offer.id),
@@ -36,8 +52,11 @@ export function toListingRfqDto(snapshot: RfqSnapshot): ListingRfqDto {
     ...(offersCount !== undefined ? { offersCount } : {}),
     canSubmitOffer: snapshot.actions?.can_submit_offer,
     canDecideOffers: snapshot.actions?.can_select,
+    canConfirmOffer: snapshot.actions?.can_confirm,
+    canDeclineOffer: snapshot.actions?.can_decline,
     ...(myOffer
       ? {
+          myOfferId: String(myOffer.id),
           myOfferStatus: myOffer.status,
           myOfferPrice: myOffer.price != null ? String(myOffer.price) : undefined,
         }

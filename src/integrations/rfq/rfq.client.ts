@@ -50,6 +50,17 @@ class RfqClient {
     });
   }
 
+  async listForResponder(responderId: string): Promise<RfqSnapshot[]> {
+    const params = new URLSearchParams({
+      platform_id: env.RMS_PLATFORM_ID,
+      scope: 'responder',
+      limit: '200',
+    });
+    return this.request<RfqSnapshot[]>('GET', `/rfqs?${params.toString()}`, undefined, {
+      'X-Responder-Id': responderId,
+    });
+  }
+
   async submitOffer(input: SubmitRfqOfferInput): Promise<unknown> {
     return this.request(
       'POST',
@@ -68,7 +79,7 @@ class RfqClient {
       'POST',
       `/rfqs/${input.rfqId}/offers/${input.offerId}/${input.action}`,
       {},
-      { 'X-Responder-Id': input.ownerId },
+      { 'X-Responder-Id': input.actorId },
     );
   }
 

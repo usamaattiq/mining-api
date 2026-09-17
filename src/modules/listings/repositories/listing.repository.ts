@@ -68,6 +68,26 @@ class ListingRepository {
       orderBy: { createdAt: 'desc' },
     });
   }
+
+  findOffered(input: { listingIds: string[]; rfqIds: string[] }): Promise<ListingWithMedia[]> {
+    const filters: Prisma.ListingWhereInput[] = [];
+    if (input.listingIds.length > 0) {
+      filters.push({ id: { in: input.listingIds } });
+    }
+    if (input.rfqIds.length > 0) {
+      filters.push({ rfqId: { in: input.rfqIds } });
+    }
+    if (filters.length === 0) return Promise.resolve([]);
+
+    return prisma.listing.findMany({
+      where: {
+        status: 'ACTIVE',
+        OR: filters,
+      },
+      include: listingInclude,
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 }
 
 export const listingRepository = new ListingRepository();

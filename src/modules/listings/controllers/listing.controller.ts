@@ -30,6 +30,11 @@ export const listingController = {
     sendSuccess(res, 200, listings);
   },
 
+  async listMyOffers(req: AuthenticatedRequest, res: Response) {
+    const listings = await listingService.listMyOffers(req.user!.id);
+    sendSuccess(res, 200, listings);
+  },
+
   async getById(req: AuthenticatedRequest, res: Response) {
     const params = req.validatedParams as ListingIdParams;
     const listing = await listingService.getById(params.id, req.user!.id);
@@ -49,7 +54,7 @@ export const listingController = {
       params.id,
       req.user!.id,
       params.offerId,
-      'accept',
+      'select',
     );
     sendSuccess(res, 200, listing);
   },
@@ -61,6 +66,28 @@ export const listingController = {
       req.user!.id,
       params.offerId,
       'reject',
+    );
+    sendSuccess(res, 200, listing);
+  },
+
+  async confirmOffer(req: AuthenticatedRequest, res: Response) {
+    const params = req.validatedParams as ListingOfferActionParams;
+    const listing = await listingService.decideOffer(
+      params.id,
+      req.user!.id,
+      params.offerId,
+      'confirm',
+    );
+    sendSuccess(res, 200, listing);
+  },
+
+  async declineOffer(req: AuthenticatedRequest, res: Response) {
+    const params = req.validatedParams as ListingOfferActionParams;
+    const listing = await listingService.decideOffer(
+      params.id,
+      req.user!.id,
+      params.offerId,
+      'decline',
     );
     sendSuccess(res, 200, listing);
   },

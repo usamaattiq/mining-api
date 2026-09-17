@@ -15,6 +15,7 @@ export type RfqSnapshot = {
   status: string;
   status_label: string;
   status_variant: RfqStatusVariant;
+  external_ref?: string | null;
   expires_at?: string | null;
   offers?: RfqOfferSummary[];
   my_offers?: RfqOfferSummary[];
@@ -46,6 +47,6 @@ export type SubmitRfqOfferInput = {
 export type DecideRfqOfferInput = {
   rfqId: string;
   offerId: string;
-  ownerId: string;
-  action: 'accept' | 'reject';
+  actorId: string;
+  action: 'select' | 'reject' | 'confirm' | 'decline';
 };
