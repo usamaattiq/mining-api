@@ -3,6 +3,7 @@ import { runInTransaction } from '../../../common/database/transaction';
 import { AppError } from '../../../common/errors/app-error';
 import { ErrorCode } from '../../../common/errors/error-codes';
 import { inboxRepository } from '../../notifications/repositories/inbox.repository';
+import { notifyService } from '../../notifications/services/notify.service';
 import { listingRepository } from '../repositories/listing.repository';
 import type { ListingDto } from '../types/listing.types';
 import { toListingDto } from '../utils/listing.mapper';
@@ -100,6 +101,17 @@ class ListingService {
       );
       return created;
     });
+
+    void notifyService
+      .notifyUser({
+        userId: ownerId,
+        title: 'Listing is live',
+        body: `"${listing.title}" is now visible to buyers.`,
+        deepLink: `miningmobile://listing/${listing.category}/${listing.id}`,
+        data: { listingId: listing.id, category: listing.category },
+        idempotencyKey: `listing-live-${listing.id}`,
+      })
+      .catch(() => undefined);
 
     return toListingDto(listing);
   }
