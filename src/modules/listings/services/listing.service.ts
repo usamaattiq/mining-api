@@ -39,8 +39,9 @@ function mapRfqError(error: unknown, fallback: string): never {
 }
 
 async function withOfferNames(listing: ListingDto): Promise<ListingDto> {
-  if (listing.category === 'gold' || !listing.rfq?.offers?.length) return listing;
-  const ids = [...new Set(listing.rfq.offers.map((offer) => offer.responderId).filter(Boolean))];
+  if (!('rfq' in listing) || !listing.rfq?.offers?.length) return listing;
+  const offers = listing.rfq.offers;
+  const ids = [...new Set(offers.map((offer) => offer.responderId).filter(Boolean))];
   if (ids.length === 0) return listing;
   const users = await prisma.user.findMany({
     where: { id: { in: ids }, deletedAt: null },
@@ -51,7 +52,7 @@ async function withOfferNames(listing: ListingDto): Promise<ListingDto> {
     ...listing,
     rfq: {
       ...listing.rfq,
-      offers: listing.rfq.offers.map((offer) => ({
+      offers: offers.map((offer) => ({
         ...offer,
         responderName: names.get(offer.responderId) || offer.responderName || 'Buyer',
       })),
@@ -180,7 +181,10 @@ class ListingService {
     });
     const listings = await attachRfqStatuses(rows.map(toListingDto), rows, viewerId);
     const hideRfqIds = await attachedRfqIdsForViewer(viewerId);
-    return listings.filter((listing) => !listing.rfq || !hideRfqIds.has(listing.rfq.id));
+    return listings.filter((listing) => {
+      if (!('rfq' in listing) || !listing.rfq) return true;
+      return !hideRfqIds.has(listing.rfq.id);
+    });
   }
 
   async listMyOffers(viewerId: string): Promise<ListingDto[]> {
@@ -207,6 +211,9 @@ class ListingService {
       throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
     }
     const [dto] = await attachRfqStatuses([toListingDto(listing)], [listing], viewerId);
+    if (!dto) {
+      throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
+    }
     return withOfferNames(dto);
   }
 
