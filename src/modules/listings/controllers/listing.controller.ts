@@ -5,8 +5,10 @@ import { listingService } from '../services/listing.service';
 import type {
   CreateListingBody,
   ListingIdParams,
+  ListingOfferActionParams,
   ListFeedQuery,
   ListListingsQuery,
+  SubmitListingOfferBody,
 } from '../validation/listing.schema';
 
 export const listingController = {
@@ -28,9 +30,65 @@ export const listingController = {
     sendSuccess(res, 200, listings);
   },
 
+  async listMyOffers(req: AuthenticatedRequest, res: Response) {
+    const listings = await listingService.listMyOffers(req.user!.id);
+    sendSuccess(res, 200, listings);
+  },
+
   async getById(req: AuthenticatedRequest, res: Response) {
     const params = req.validatedParams as ListingIdParams;
-    const listing = await listingService.getById(params.id);
+    const listing = await listingService.getById(params.id, req.user!.id);
+    sendSuccess(res, 200, listing);
+  },
+
+  async submitOffer(req: AuthenticatedRequest, res: Response) {
+    const params = req.validatedParams as ListingIdParams;
+    const body = req.validatedBody as SubmitListingOfferBody;
+    const listing = await listingService.submitOffer(params.id, req.user!.id, body);
+    sendSuccess(res, 201, listing);
+  },
+
+  async acceptOffer(req: AuthenticatedRequest, res: Response) {
+    const params = req.validatedParams as ListingOfferActionParams;
+    const listing = await listingService.decideOffer(
+      params.id,
+      req.user!.id,
+      params.offerId,
+      'select',
+    );
+    sendSuccess(res, 200, listing);
+  },
+
+  async rejectOffer(req: AuthenticatedRequest, res: Response) {
+    const params = req.validatedParams as ListingOfferActionParams;
+    const listing = await listingService.decideOffer(
+      params.id,
+      req.user!.id,
+      params.offerId,
+      'reject',
+    );
+    sendSuccess(res, 200, listing);
+  },
+
+  async confirmOffer(req: AuthenticatedRequest, res: Response) {
+    const params = req.validatedParams as ListingOfferActionParams;
+    const listing = await listingService.decideOffer(
+      params.id,
+      req.user!.id,
+      params.offerId,
+      'confirm',
+    );
+    sendSuccess(res, 200, listing);
+  },
+
+  async declineOffer(req: AuthenticatedRequest, res: Response) {
+    const params = req.validatedParams as ListingOfferActionParams;
+    const listing = await listingService.decideOffer(
+      params.id,
+      req.user!.id,
+      params.offerId,
+      'decline',
+    );
     sendSuccess(res, 200, listing);
   },
 };

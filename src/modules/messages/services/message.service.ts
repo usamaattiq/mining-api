@@ -117,7 +117,13 @@ class MessageService {
         data: { conversationId, listingId: conversation.listingId },
         idempotencyKey: `message-${updated.created.id}`,
       })
-      .catch(() => undefined);
+      .catch((error) => {
+        console.error('Push notify failed for message', {
+          conversationId,
+          recipientId,
+          error,
+        });
+      });
 
     return toConversationDto(updated.row, userId);
   }

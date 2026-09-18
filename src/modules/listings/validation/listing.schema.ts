@@ -84,3 +84,24 @@ export type CreateListingBody = z.infer<typeof createListingBodySchema>['body'];
 export type ListListingsQuery = z.infer<typeof listListingsQuerySchema>['query'];
 export type ListFeedQuery = z.infer<typeof listFeedQuerySchema>['query'];
 export type ListingIdParams = z.infer<typeof listingIdParamsSchema>['params'];
+
+export const submitListingOfferBodySchema = z.object({
+  body: z.object({
+    price: z
+      .string()
+      .trim()
+      .min(1)
+      .max(40)
+      .regex(/^\d+(\.\d{1,2})?$/, 'Enter a valid amount'),
+  }),
+});
+
+export const listingOfferActionParamsSchema = z.object({
+  params: z.object({
+    id: z.string().uuid(),
+    offerId: z.string().uuid(),
+  }),
+});
+
+export type SubmitListingOfferBody = z.infer<typeof submitListingOfferBodySchema>['body'];
+export type ListingOfferActionParams = z.infer<typeof listingOfferActionParamsSchema>['params'];

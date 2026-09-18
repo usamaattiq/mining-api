@@ -21,6 +21,14 @@ class ListingRepository {
     return tx.listing.findUnique({ where: { id }, include: listingInclude });
   }
 
+  setRfqId(id: string, rfqId: string, tx: Tx | typeof prisma = prisma): Promise<ListingWithMedia> {
+    return tx.listing.update({
+      where: { id },
+      data: { rfqId },
+      include: listingInclude,
+    });
+  }
+
   findMine(input: {
     ownerId: string;
     postedAs?: MarketplaceRole;
@@ -57,6 +65,26 @@ class ListingRepository {
         media: { orderBy: { sortOrder: 'asc' }, take: 6 },
         owner: { select: { id: true, fullName: true, avatarUrl: true } },
       },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  findOffered(input: { listingIds: string[]; rfqIds: string[] }): Promise<ListingWithMedia[]> {
+    const filters: Prisma.ListingWhereInput[] = [];
+    if (input.listingIds.length > 0) {
+      filters.push({ id: { in: input.listingIds } });
+    }
+    if (input.rfqIds.length > 0) {
+      filters.push({ rfqId: { in: input.rfqIds } });
+    }
+    if (filters.length === 0) return Promise.resolve([]);
+
+    return prisma.listing.findMany({
+      where: {
+        status: 'ACTIVE',
+        OR: filters,
+      },
+      include: listingInclude,
       orderBy: { createdAt: 'desc' },
     });
   }

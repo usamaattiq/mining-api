@@ -21,6 +21,7 @@ export const notifyService = {
       data: input.data,
       userIds: [input.userId],
       channelId: input.channelId ?? 'default',
+      sound: 'default',
       idempotencyKey: input.idempotencyKey,
     });
   },

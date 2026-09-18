@@ -197,6 +197,9 @@ model Listing {
   purityLabel    String?
   auctionEndDate DateTime?
 
+  /** RMS RFQ id — set for equipment and service listings when RFQ is configured. */
+  rfqId String? @unique
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
