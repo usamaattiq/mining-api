@@ -64,6 +64,12 @@ listingsRouter.post(
 );
 
 listingsRouter.post(
+  '/:id/offers/:offerId/withdraw',
+  validate(listingOfferActionParamsSchema),
+  wrap((req, res) => listingController.withdrawOffer(req, res)),
+);
+
+listingsRouter.post(
   '/:id/offers',
   validate(listingIdParamsSchema.merge(submitListingOfferBodySchema)),
   wrap((req, res) => listingController.submitOffer(req, res)),

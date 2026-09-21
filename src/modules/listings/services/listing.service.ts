@@ -15,6 +15,7 @@ import {
   snapshotHasAttachedOffer,
   withRfq,
 } from '../utils/listing-rfq';
+import { notifyListingRfq } from '../utils/listing-rfq-notify';
 import { toListingDto } from '../utils/listing.mapper';
 import type {
   CreateListingBody,
@@ -54,7 +55,7 @@ async function withOfferNames(listing: ListingDto): Promise<ListingDto> {
       ...listing.rfq,
       offers: offers.map((offer) => ({
         ...offer,
-        responderName: names.get(offer.responderId) || offer.responderName || 'Buyer',
+        responderName: names.get(offer.responderId) || offer.responderName || '—',
       })),
     },
   };
@@ -236,13 +237,6 @@ class ListingService {
     if (listing.ownerId === viewerId) {
       throw new AppError('You cannot offer on your own listing', 400, ErrorCode.FORBIDDEN);
     }
-    if (listing.postedAs !== 'supplier') {
-      throw new AppError(
-        'Only supplier listings accept buyer offers',
-        400,
-        ErrorCode.VALIDATION_ERROR,
-      );
-    }
 
     try {
       await rfqClient.submitOffer({
@@ -255,6 +249,14 @@ class ListingService {
       mapRfqError(error, 'Could not submit offer');
     }
 
+    notifyListingRfq(
+      listing.ownerId,
+      'New offer received',
+      `Someone submitted an offer on "${listing.title}".`,
+      listing,
+      `rfq-offer:${listing.rfqId}:${viewerId}`,
+    );
+
     return this.getById(listingId, viewerId);
   }
 
@@ -262,7 +264,7 @@ class ListingService {
     listingId: string,
     viewerId: string,
     offerId: string,
-    action: 'select' | 'reject' | 'confirm' | 'decline',
+    action: 'select' | 'reject' | 'confirm' | 'decline' | 'withdraw',
   ): Promise<ListingDto> {
     const listing = await listingRepository.findById(listingId);
     if (!listing || listing.status !== 'ACTIVE') {
@@ -283,15 +285,66 @@ class ListingService {
       throw new AppError('The listing owner cannot confirm this offer', 400, ErrorCode.FORBIDDEN);
     }
 
+    let responderId: string | undefined;
     try {
+      const snapshot = await rfqClient.getSnapshot(listing.rfqId, viewerId);
+      const offer = [...(snapshot.offers ?? []), ...(snapshot.my_offers ?? [])].find(
+        (row) => String(row.id) === offerId,
+      );
+      responderId = offer ? String(offer.responder_id ?? offer.responderId ?? '') : undefined;
       await rfqClient.decideOffer({
         rfqId: listing.rfqId,
         offerId,
         actorId: viewerId,
         action,
       });
+      if (action === 'confirm') {
+        await rfqClient.completeRfq(listing.rfqId, listing.ownerId).catch(() => undefined);
+      }
     } catch (error) {
       mapRfqError(error, `Could not ${action} offer`);
+    }
+
+    if (action === 'select' && responderId) {
+      notifyListingRfq(
+        responderId,
+        'You were selected',
+        `Your offer on "${listing.title}" was selected. Confirm to proceed.`,
+        listing,
+        `rfq-select:${offerId}`,
+      );
+    } else if (action === 'reject' && responderId) {
+      notifyListingRfq(
+        responderId,
+        'Offer rejected',
+        `Your offer on "${listing.title}" was not accepted.`,
+        listing,
+        `rfq-reject:${offerId}`,
+      );
+    } else if (action === 'confirm') {
+      notifyListingRfq(
+        listing.ownerId,
+        'Offer confirmed',
+        `An offer on "${listing.title}" was confirmed.`,
+        listing,
+        `rfq-confirm:${offerId}`,
+      );
+    } else if (action === 'decline') {
+      notifyListingRfq(
+        listing.ownerId,
+        'Offer declined',
+        `A selected offer on "${listing.title}" was declined.`,
+        listing,
+        `rfq-decline:${offerId}`,
+      );
+    } else if (action === 'withdraw') {
+      notifyListingRfq(
+        listing.ownerId,
+        'Offer withdrawn',
+        `An offer on "${listing.title}" was withdrawn.`,
+        listing,
+        `rfq-withdraw:${offerId}`,
+      );
     }
 
     return this.getById(listingId, viewerId);

@@ -91,4 +91,15 @@ export const listingController = {
     );
     sendSuccess(res, 200, listing);
   },
+
+  async withdrawOffer(req: AuthenticatedRequest, res: Response) {
+    const params = req.validatedParams as ListingOfferActionParams;
+    const listing = await listingService.decideOffer(
+      params.id,
+      req.user!.id,
+      params.offerId,
+      'withdraw',
+    );
+    sendSuccess(res, 200, listing);
+  },
 };

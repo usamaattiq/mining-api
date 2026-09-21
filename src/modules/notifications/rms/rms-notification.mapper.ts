@@ -44,9 +44,9 @@ export type NotificationCopy = {
 
 function rfqDeepLink(externalRef: string | null | undefined): string {
   if (externalRef) {
-    return `miningmobile://requests/${externalRef}`;
+    return `miningmobile://listing/equipment/${externalRef}`;
   }
-  return 'miningmobile://requests';
+  return 'miningmobile://home';
 }
 
 /** Maps RFQ Pub/Sub facts → mobile copy. Return null to skip delivery. */

@@ -48,5 +48,5 @@ export type DecideRfqOfferInput = {
   rfqId: string;
   offerId: string;
   actorId: string;
-  action: 'select' | 'reject' | 'confirm' | 'decline';
+  action: 'select' | 'reject' | 'confirm' | 'decline' | 'withdraw';
 };

@@ -10,6 +10,18 @@ import type {
 
 export const ATTACHED_OFFER_STATUSES = new Set(['active', 'selected', 'confirmed']);
 
+function latestOffersByResponder(offers: RfqOfferSummary[]): RfqOfferSummary[] {
+  const seen = new Set<string>();
+  const latest: RfqOfferSummary[] = [];
+  for (const offer of offers) {
+    const responderId = String(offer.responder_id ?? offer.responderId ?? offer.id);
+    if (seen.has(responderId)) continue;
+    seen.add(responderId);
+    latest.push(offer);
+  }
+  return latest;
+}
+
 export function snapshotHasAttachedOffer(snapshot: RfqSnapshot): boolean {
   return (snapshot.my_offers ?? []).some((offer) => ATTACHED_OFFER_STATUSES.has(offer.status));
 }
@@ -35,14 +47,13 @@ function mapOffer(offer: RfqOfferSummary): ListingRfqOfferDto {
 }
 
 export function toListingRfqDto(snapshot: RfqSnapshot): ListingRfqDto {
-  const ownerOffers = (snapshot.offers ?? []).map(mapOffer);
+  const ownerOffers = latestOffersByResponder(snapshot.offers ?? []).map(mapOffer);
   const myOffers = (snapshot.my_offers ?? []).map(mapOffer);
   const offers = ownerOffers.length > 0 ? ownerOffers : undefined;
   const offersCount = ownerOffers.length || myOffers.length || undefined;
   const myOffer =
-    snapshot.my_offers?.find((offer) =>
-      ['active', 'selected', 'confirmed'].includes(offer.status),
-    ) ?? snapshot.my_offers?.[0];
+    snapshot.my_offers?.find((offer) => ATTACHED_OFFER_STATUSES.has(offer.status)) ??
+    snapshot.my_offers?.[0];
   return {
     id: snapshot.id,
     status: snapshot.status,
@@ -54,6 +65,7 @@ export function toListingRfqDto(snapshot: RfqSnapshot): ListingRfqDto {
     canDecideOffers: snapshot.actions?.can_select,
     canConfirmOffer: snapshot.actions?.can_confirm,
     canDeclineOffer: snapshot.actions?.can_decline,
+    canWithdrawOffer: snapshot.actions?.can_withdraw,
     ...(myOffer
       ? {
           myOfferId: String(myOffer.id),
@@ -69,16 +81,6 @@ export function withRfq(listing: ListingDto, snapshot: RfqSnapshot | undefined):
   if (listing.category === 'gold') return listing;
   if (!snapshot) return listing;
   return { ...listing, rfq: toListingRfqDto(snapshot) };
-}
-
-function fallbackSnapshot(rfqId: string): RfqSnapshot {
-  return {
-    id: rfqId,
-    status: 'live',
-    status_label: 'Live',
-    status_variant: 'accent',
-    actions: { can_submit_offer: true },
-  };
 }
 
 export async function attachRfqStatuses(
@@ -100,7 +102,7 @@ export async function attachRfqStatuses(
   return listings.map((listing) => {
     const rfqId = byListingId.get(listing.id);
     if (!rfqId) return listing;
-    return withRfq(listing, snapshots.get(rfqId) ?? fallbackSnapshot(rfqId));
+    return withRfq(listing, snapshots.get(rfqId));
   });
 }
 

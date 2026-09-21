@@ -37,6 +37,7 @@ export type ListingRfqDto = {
   canDecideOffers?: boolean;
   canConfirmOffer?: boolean;
   canDeclineOffer?: boolean;
+  canWithdrawOffer?: boolean;
   myOfferId?: string;
   myOfferStatus?: string;
   myOfferPrice?: string;
