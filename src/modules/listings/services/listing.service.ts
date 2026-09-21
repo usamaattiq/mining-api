@@ -106,7 +106,7 @@ function listingCreateData(ownerId: string, input: CreateListingBody): Prisma.Li
       category: 'services',
       title: input.title,
       description: input.description,
-      location: input.serviceType === 'onsite' ? input.location : '',
+      location: input.serviceType === 'online' ? '' : input.location,
       serviceType: input.serviceType,
       serviceCategoryLabel: input.serviceCategoryLabel,
       yearsOfExperience: input.yearsOfExperience,

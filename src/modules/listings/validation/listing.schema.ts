@@ -31,7 +31,7 @@ const equipmentBodySchema = z.object({
 
 const serviceBodySchema = z.object({
   category: z.literal('services'),
-  serviceType: z.enum(['onsite', 'online']),
+  serviceType: z.enum(['onsite', 'online', 'both']),
   serviceCategoryLabel: z.string().trim().min(1).max(150),
   title: z.string().trim().min(1).max(200),
   description: z.string().trim().max(5000).default(''),

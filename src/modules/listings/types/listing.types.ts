@@ -72,7 +72,7 @@ export type ServiceListingDto = {
   id: string;
   ownerId: string;
   category: 'services';
-  serviceType: 'onsite' | 'online';
+  serviceType: 'onsite' | 'online' | 'both';
   serviceCategoryLabel: string;
   title: string;
   description: string;
