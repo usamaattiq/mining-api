@@ -227,7 +227,7 @@ class ListingService {
     if (!listing || listing.status !== 'ACTIVE') {
       throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
     }
-    if (listing.category === 'gold' || !listing.rfqId) {
+    if (!listing.rfqId) {
       throw new AppError(
         'Offers are not available for this listing',
         400,

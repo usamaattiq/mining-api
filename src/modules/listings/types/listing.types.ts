@@ -102,6 +102,7 @@ export type GoldListingDto = {
   postedAs: 'buyer' | 'supplier';
   owner: ListingOwnerDto;
   createdAt: number;
+  rfq?: ListingRfqDto;
 };
 
 export type ListingDto = EquipmentListingDto | ServiceListingDto | GoldListingDto;

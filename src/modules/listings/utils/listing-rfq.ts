@@ -78,7 +78,6 @@ export function toListingRfqDto(snapshot: RfqSnapshot): ListingRfqDto {
 }
 
 export function withRfq(listing: ListingDto, snapshot: RfqSnapshot | undefined): ListingDto {
-  if (listing.category === 'gold') return listing;
   if (!snapshot) return listing;
   return { ...listing, rfq: toListingRfqDto(snapshot) };
 }
@@ -89,9 +88,7 @@ export async function attachRfqStatuses(
   viewerId: string,
 ): Promise<ListingDto[]> {
   const byListingId = new Map(
-    rows
-      .filter((row) => row.category !== 'gold' && row.rfqId)
-      .map((row) => [row.id, row.rfqId as string]),
+    rows.filter((row) => row.rfqId).map((row) => [row.id, row.rfqId as string]),
   );
   if (byListingId.size === 0) return listings;
 
@@ -110,7 +107,13 @@ export async function createListingRfq(
   listing: ListingWithMedia,
 ): Promise<{ listing: ListingWithMedia; snapshot?: RfqSnapshot }> {
   if (!rfqClient.isConfigured()) return { listing };
-  if (listing.category !== 'equipment' && listing.category !== 'services') return { listing };
+  if (
+    listing.category !== 'equipment' &&
+    listing.category !== 'services' &&
+    listing.category !== 'gold'
+  ) {
+    return { listing };
+  }
 
   try {
     const snapshot = await rfqClient.createRfq({
