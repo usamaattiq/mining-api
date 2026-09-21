@@ -93,6 +93,7 @@ export const submitListingOfferBodySchema = z.object({
       .min(1)
       .max(40)
       .regex(/^\d+(\.\d{1,2})?$/, 'Enter a valid amount'),
+    units: z.number().int().min(1).max(9999).optional(),
   }),
 });
 

@@ -36,13 +36,21 @@ export async function attachedRfqIdsForViewer(viewerId: string): Promise<Set<str
   }
 }
 
+function parseQuantity(value: string | number | null | undefined): number | undefined {
+  if (value == null || value === '') return undefined;
+  const next = Number(value);
+  return Number.isFinite(next) ? next : undefined;
+}
+
 function mapOffer(offer: RfqOfferSummary): ListingRfqOfferDto {
+  const quantity = parseQuantity(offer.offered_quantity);
   return {
     id: String(offer.id),
     responderId: String(offer.responder_id ?? offer.responderId ?? ''),
     responderName: '',
     status: offer.status,
     ...(offer.price != null ? { price: String(offer.price) } : {}),
+    ...(quantity != null ? { quantity } : {}),
   };
 }
 
@@ -54,6 +62,7 @@ export function toListingRfqDto(snapshot: RfqSnapshot): ListingRfqDto {
   const myOffer =
     snapshot.my_offers?.find((offer) => ATTACHED_OFFER_STATUSES.has(offer.status)) ??
     snapshot.my_offers?.[0];
+  const mappedMyOffer = myOffer ? mapOffer(myOffer) : undefined;
   return {
     id: snapshot.id,
     status: snapshot.status,
@@ -66,11 +75,12 @@ export function toListingRfqDto(snapshot: RfqSnapshot): ListingRfqDto {
     canConfirmOffer: snapshot.actions?.can_confirm,
     canDeclineOffer: snapshot.actions?.can_decline,
     canWithdrawOffer: snapshot.actions?.can_withdraw,
-    ...(myOffer
+    ...(mappedMyOffer
       ? {
-          myOfferId: String(myOffer.id),
-          myOfferStatus: myOffer.status,
-          myOfferPrice: myOffer.price != null ? String(myOffer.price) : undefined,
+          myOfferId: mappedMyOffer.id,
+          myOfferStatus: mappedMyOffer.status,
+          myOfferPrice: mappedMyOffer.price,
+          ...(mappedMyOffer.quantity != null ? { myOfferQuantity: mappedMyOffer.quantity } : {}),
         }
       : {}),
     ...(offers ? { offers } : {}),

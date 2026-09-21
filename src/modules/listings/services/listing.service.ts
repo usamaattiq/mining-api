@@ -239,11 +239,18 @@ class ListingService {
     }
 
     try {
+      const units =
+        listing.category === 'equipment'
+          ? Math.min(Math.max(input.units ?? 1, 1), Math.max(listing.units ?? 1, 1))
+          : undefined;
+      const unitPrice = Number(input.price);
+      const totalPrice = units != null ? Math.round(unitPrice * units * 100) / 100 : unitPrice;
       await rfqClient.submitOffer({
         rfqId: listing.rfqId,
         responderId: viewerId,
-        price: Number(input.price),
+        price: totalPrice,
         capacityMode: 'full',
+        ...(units != null ? { offeredQuantity: units } : {}),
       });
     } catch (error) {
       mapRfqError(error, 'Could not submit offer');
