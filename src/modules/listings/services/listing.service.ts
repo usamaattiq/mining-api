@@ -69,7 +69,6 @@ function epochToDate(value: number | null | undefined): Date | null {
 function listingCreateData(ownerId: string, input: CreateListingBody): Prisma.ListingCreateInput {
   const media = {
     create: input.media.map((item, index) => ({
-      ...(item.id ? { id: item.id } : {}),
       uri: item.uri,
       kind: item.kind,
       name: item.name,
@@ -96,6 +95,7 @@ function listingCreateData(ownerId: string, input: CreateListingBody): Prisma.Li
       deliveryType: input.deliveryType,
       deliveryPricePerKm: input.deliveryPricePerKm,
       postedAs: input.postedAs,
+      serviceDate: epochToDate(input.neededDate),
       media,
     };
   }

@@ -27,6 +27,7 @@ const equipmentBodySchema = z.object({
   deliveryType: z.enum(['free', 'perKm']).default('free'),
   deliveryPricePerKm: z.string().trim().max(40).default(''),
   postedAs: z.enum(['buyer', 'supplier']).default('supplier'),
+  neededDate: z.number().int().nullable().optional(),
 });
 
 const serviceBodySchema = z.object({
