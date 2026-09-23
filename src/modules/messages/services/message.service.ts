@@ -8,7 +8,7 @@ import { conversationRepository } from '../repositories/conversation.repository'
 import { messageRepository } from '../repositories/message.repository';
 import type { ConversationDto } from '../types/message.types';
 import { toConversationDto } from '../utils/conversation.mapper';
-import { emitChatMessage } from '../../../realtime/chat.emitter';
+import { emitChatMessage, emitChatRead } from '../../../realtime/chat.emitter';
 import { rfqClient } from '../../../integrations/rfq/rfq.client';
 
 function assertParticipant(buyerId: string, sellerId: string, userId: string): void {
@@ -136,6 +136,7 @@ class MessageService {
         id: updated.created.id,
         text: updated.created.text,
         sentAt: updated.created.createdAt.getTime(),
+        status: 'sent' as const,
       },
     });
 
@@ -165,7 +166,13 @@ class MessageService {
       throw new AppError('Conversation not found', 404, ErrorCode.NOT_FOUND);
     }
     assertParticipant(conversation.buyerId, conversation.sellerId, userId);
-    await conversationRepository.upsertReceipt(conversationId, userId, new Date());
+    const readAt = new Date();
+    await conversationRepository.upsertReceipt(conversationId, userId, readAt);
+    emitChatRead(conversation.buyerId, conversation.sellerId, {
+      conversationId,
+      readerId: userId,
+      readAt: readAt.getTime(),
+    });
     const refreshed = await conversationRepository.findById(conversationId);
     return toConversationDto(refreshed ?? conversation, userId);
   }
