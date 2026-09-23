@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const startConversationBodySchema = z.object({
   body: z.object({
     listingId: z.string().uuid(),
+    buyerId: z.string().uuid().optional(),
   }),
 });
 

@@ -24,24 +24,34 @@ class RfqClient {
     return Boolean(env.RFQ_BASE_URL?.trim() && env.RFQ_API_KEY?.trim());
   }
 
+  /** True when RMS accepts a connection. Any HTTP response counts as up. */
+  async isReachable(): Promise<boolean> {
+    if (!this.isConfigured()) return false;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2500);
+    try {
+      await fetch(`${this.apiRoot}/health`, { signal: controller.signal });
+      return true;
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
   private get apiRoot(): string {
     return (env.RFQ_BASE_URL ?? '').replace(/\/+$/, '');
   }
 
   async createRfq(input: CreateRfqInput): Promise<RfqSnapshot> {
-    return this.request<RfqSnapshot>(
-      'POST',
-      '/rfqs',
-      {
-        platform_id: env.RMS_PLATFORM_ID,
-        owner_id: input.ownerId,
-        enforce_capacity_limit: input.enforceCapacityLimit,
-        total_quantity: input.totalQuantity,
-        expiry_hours: input.expiryHours ?? 24,
-        external_ref: input.listingId,
-      },
-      { 'X-Responder-Id': input.ownerId },
-    );
+    return this.request<RfqSnapshot>('POST', '/rfqs', {
+      platform_id: env.RMS_PLATFORM_ID,
+      owner_id: input.ownerId,
+      enforce_capacity_limit: input.enforceCapacityLimit,
+      total_quantity: input.totalQuantity,
+      expiry_hours: input.expiryHours ?? 24,
+      external_ref: input.listingId,
+    });
   }
 
   async getSnapshot(rfqId: string, viewerId: string): Promise<RfqSnapshot> {
@@ -80,6 +90,17 @@ class RfqClient {
       `/rfqs/${input.rfqId}/offers/${input.offerId}/${input.action}`,
       {},
       { 'X-Responder-Id': input.actorId },
+    );
+  }
+
+  async completeRfq(rfqId: string, ownerId: string): Promise<RfqSnapshot> {
+    return this.request<RfqSnapshot>(
+      'POST',
+      `/rfqs/${rfqId}/owner/complete`,
+      {},
+      {
+        'X-Responder-Id': ownerId,
+      },
     );
   }
 

@@ -16,7 +16,11 @@ export const messageController = {
 
   async start(req: AuthenticatedRequest, res: Response) {
     const body = req.validatedBody as StartConversationBody;
-    const conversation = await messageService.startConversation(req.user!.id, body.listingId);
+    const conversation = await messageService.startConversation(
+      req.user!.id,
+      body.listingId,
+      body.buyerId,
+    );
     sendSuccess(res, 200, conversation);
   },
 

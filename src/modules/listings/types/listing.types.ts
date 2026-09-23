@@ -24,6 +24,7 @@ export type ListingRfqOfferDto = {
   responderName: string;
   status: string;
   price?: string;
+  quantity?: number;
 };
 
 export type ListingRfqDto = {
@@ -37,9 +38,11 @@ export type ListingRfqDto = {
   canDecideOffers?: boolean;
   canConfirmOffer?: boolean;
   canDeclineOffer?: boolean;
+  canWithdrawOffer?: boolean;
   myOfferId?: string;
   myOfferStatus?: string;
   myOfferPrice?: string;
+  myOfferQuantity?: number;
   offers?: ListingRfqOfferDto[];
 };
 
@@ -62,6 +65,7 @@ export type EquipmentListingDto = {
   deliveryType: 'free' | 'perKm';
   deliveryPricePerKm: string;
   postedAs: 'buyer' | 'supplier';
+  neededDate: number | null;
   owner: ListingOwnerDto;
   createdAt: number;
   rfq?: ListingRfqDto;
@@ -71,7 +75,7 @@ export type ServiceListingDto = {
   id: string;
   ownerId: string;
   category: 'services';
-  serviceType: 'onsite' | 'online';
+  serviceType: 'onsite' | 'online' | 'both';
   serviceCategoryLabel: string;
   title: string;
   description: string;
@@ -101,6 +105,7 @@ export type GoldListingDto = {
   postedAs: 'buyer' | 'supplier';
   owner: ListingOwnerDto;
   createdAt: number;
+  rfq?: ListingRfqDto;
 };
 
 export type ListingDto = EquipmentListingDto | ServiceListingDto | GoldListingDto;

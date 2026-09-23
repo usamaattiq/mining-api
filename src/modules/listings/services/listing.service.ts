@@ -15,6 +15,7 @@ import {
   snapshotHasAttachedOffer,
   withRfq,
 } from '../utils/listing-rfq';
+import { notifyListingRfq } from '../utils/listing-rfq-notify';
 import { toListingDto } from '../utils/listing.mapper';
 import type {
   CreateListingBody,
@@ -54,7 +55,7 @@ async function withOfferNames(listing: ListingDto): Promise<ListingDto> {
       ...listing.rfq,
       offers: offers.map((offer) => ({
         ...offer,
-        responderName: names.get(offer.responderId) || offer.responderName || 'Buyer',
+        responderName: names.get(offer.responderId) || offer.responderName || '—',
       })),
     },
   };
@@ -68,7 +69,6 @@ function epochToDate(value: number | null | undefined): Date | null {
 function listingCreateData(ownerId: string, input: CreateListingBody): Prisma.ListingCreateInput {
   const media = {
     create: input.media.map((item, index) => ({
-      ...(item.id ? { id: item.id } : {}),
       uri: item.uri,
       kind: item.kind,
       name: item.name,
@@ -95,6 +95,7 @@ function listingCreateData(ownerId: string, input: CreateListingBody): Prisma.Li
       deliveryType: input.deliveryType,
       deliveryPricePerKm: input.deliveryPricePerKm,
       postedAs: input.postedAs,
+      serviceDate: epochToDate(input.neededDate),
       media,
     };
   }
@@ -105,7 +106,7 @@ function listingCreateData(ownerId: string, input: CreateListingBody): Prisma.Li
       category: 'services',
       title: input.title,
       description: input.description,
-      location: input.serviceType === 'onsite' ? input.location : '',
+      location: input.serviceType === 'online' ? '' : input.location,
       serviceType: input.serviceType,
       serviceCategoryLabel: input.serviceCategoryLabel,
       yearsOfExperience: input.yearsOfExperience,
@@ -133,6 +134,10 @@ function listingCreateData(ownerId: string, input: CreateListingBody): Prisma.Li
 
 class ListingService {
   async create(ownerId: string, input: CreateListingBody): Promise<ListingDto> {
+    if (!(await rfqClient.isReachable())) {
+      throw new AppError('RFQ Management System Down', 503, ErrorCode.INTERNAL_ERROR);
+    }
+
     const listing = await runInTransaction(async (tx) => {
       const created = await listingRepository.create(listingCreateData(ownerId, input), tx);
       await inboxRepository.create(
@@ -160,7 +165,11 @@ class ListingService {
       })
       .catch(() => undefined);
 
-    const { listing: withRfqRow, snapshot } = await createListingRfq(listing);
+    const expiryHours =
+      input.category === 'equipment' || input.category === 'services'
+        ? input.expiryHours
+        : undefined;
+    const { listing: withRfqRow, snapshot } = await createListingRfq(listing, expiryHours);
     return withRfq(toListingDto(withRfqRow), snapshot);
   }
 
@@ -226,7 +235,7 @@ class ListingService {
     if (!listing || listing.status !== 'ACTIVE') {
       throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
     }
-    if (listing.category === 'gold' || !listing.rfqId) {
+    if (!listing.rfqId) {
       throw new AppError(
         'Offers are not available for this listing',
         400,
@@ -236,24 +245,32 @@ class ListingService {
     if (listing.ownerId === viewerId) {
       throw new AppError('You cannot offer on your own listing', 400, ErrorCode.FORBIDDEN);
     }
-    if (listing.postedAs !== 'supplier') {
-      throw new AppError(
-        'Only supplier listings accept buyer offers',
-        400,
-        ErrorCode.VALIDATION_ERROR,
-      );
-    }
 
     try {
+      const units =
+        listing.category === 'equipment'
+          ? Math.min(Math.max(input.units ?? 1, 1), Math.max(listing.units ?? 1, 1))
+          : undefined;
+      const unitPrice = Number(input.price);
+      const totalPrice = units != null ? Math.round(unitPrice * units * 100) / 100 : unitPrice;
       await rfqClient.submitOffer({
         rfqId: listing.rfqId,
         responderId: viewerId,
-        price: Number(input.price),
-        capacityMode: 'full',
+        price: totalPrice,
+        capacityMode: 'partial',
+        offeredQuantity: units ?? 1,
       });
     } catch (error) {
       mapRfqError(error, 'Could not submit offer');
     }
+
+    notifyListingRfq(
+      listing.ownerId,
+      'New offer received',
+      `Someone submitted an offer on "${listing.title}".`,
+      listing,
+      `rfq-offer:${listing.rfqId}:${viewerId}`,
+    );
 
     return this.getById(listingId, viewerId);
   }
@@ -262,7 +279,7 @@ class ListingService {
     listingId: string,
     viewerId: string,
     offerId: string,
-    action: 'select' | 'reject' | 'confirm' | 'decline',
+    action: 'select' | 'reject' | 'confirm' | 'decline' | 'withdraw',
   ): Promise<ListingDto> {
     const listing = await listingRepository.findById(listingId);
     if (!listing || listing.status !== 'ACTIVE') {
@@ -283,15 +300,66 @@ class ListingService {
       throw new AppError('The listing owner cannot confirm this offer', 400, ErrorCode.FORBIDDEN);
     }
 
+    let responderId: string | undefined;
     try {
+      const snapshot = await rfqClient.getSnapshot(listing.rfqId, viewerId);
+      const offer = [...(snapshot.offers ?? []), ...(snapshot.my_offers ?? [])].find(
+        (row) => String(row.id) === offerId,
+      );
+      responderId = offer ? String(offer.responder_id ?? offer.responderId ?? '') : undefined;
       await rfqClient.decideOffer({
         rfqId: listing.rfqId,
         offerId,
         actorId: viewerId,
         action,
       });
+      if (action === 'confirm') {
+        await rfqClient.completeRfq(listing.rfqId, listing.ownerId).catch(() => undefined);
+      }
     } catch (error) {
       mapRfqError(error, `Could not ${action} offer`);
+    }
+
+    if (action === 'select' && responderId) {
+      notifyListingRfq(
+        responderId,
+        'You were selected',
+        `Your offer on "${listing.title}" was selected. Confirm to proceed.`,
+        listing,
+        `rfq-select:${offerId}`,
+      );
+    } else if (action === 'reject' && responderId) {
+      notifyListingRfq(
+        responderId,
+        'Offer rejected',
+        `Your offer on "${listing.title}" was not accepted.`,
+        listing,
+        `rfq-reject:${offerId}`,
+      );
+    } else if (action === 'confirm') {
+      notifyListingRfq(
+        listing.ownerId,
+        'Offer confirmed',
+        `An offer on "${listing.title}" was confirmed.`,
+        listing,
+        `rfq-confirm:${offerId}`,
+      );
+    } else if (action === 'decline') {
+      notifyListingRfq(
+        listing.ownerId,
+        'Offer declined',
+        `A selected offer on "${listing.title}" was declined.`,
+        listing,
+        `rfq-decline:${offerId}`,
+      );
+    } else if (action === 'withdraw') {
+      notifyListingRfq(
+        listing.ownerId,
+        'Offer withdrawn',
+        `An offer on "${listing.title}" was withdrawn.`,
+        listing,
+        `rfq-withdraw:${offerId}`,
+      );
     }
 
     return this.getById(listingId, viewerId);

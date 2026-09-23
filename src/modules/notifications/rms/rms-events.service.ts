@@ -1,5 +1,7 @@
 import { env } from '../../../config/env';
 import { userRepository } from '../../auth/repositories/user.repository';
+import { listingRepository } from '../../listings/repositories/listing.repository';
+import { listingDeepLink } from '../../listings/utils/listing-rfq-notify';
 import { notifyService } from '../services/notify.service';
 import {
   mapRmsEventToNotification,
@@ -23,12 +25,22 @@ export const rmsEventsService = {
       return { delivered: false, reason: 'unmapped_trigger' };
     }
 
+    if (event.external_ref) {
+      const listing = await listingRepository.findById(event.external_ref);
+      if (listing) {
+        copy.deepLink = listingDeepLink(listing);
+        copy.data = { ...copy.data, listingId: listing.id, category: listing.category };
+      }
+    }
+
     const rmsRecipientId = resolveRmsRecipientId(event);
     if (!rmsRecipientId) {
       return { delivered: false, reason: 'missing_recipient' };
     }
 
-    const user = await userRepository.findByRmsId(rmsRecipientId);
+    const user =
+      (await userRepository.findById(rmsRecipientId)) ??
+      (await userRepository.findByRmsId(rmsRecipientId));
     if (!user) {
       return { delivered: false, reason: 'user_not_linked' };
     }

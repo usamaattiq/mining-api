@@ -142,6 +142,7 @@ enum EquipmentMode {
 enum ServiceListingType {
   onsite
   online
+  both
 }
 
 enum DeliveryType {

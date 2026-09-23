@@ -27,17 +27,20 @@ const equipmentBodySchema = z.object({
   deliveryType: z.enum(['free', 'perKm']).default('free'),
   deliveryPricePerKm: z.string().trim().max(40).default(''),
   postedAs: z.enum(['buyer', 'supplier']).default('supplier'),
+  neededDate: z.number().int().nullable().optional(),
+  expiryHours: z.number().int().min(1).max(8760).optional(),
 });
 
 const serviceBodySchema = z.object({
   category: z.literal('services'),
-  serviceType: z.enum(['onsite', 'online']),
+  serviceType: z.enum(['onsite', 'online', 'both']),
   serviceCategoryLabel: z.string().trim().min(1).max(150),
   title: z.string().trim().min(1).max(200),
   description: z.string().trim().max(5000).default(''),
   yearsOfExperience: z.string().trim().max(20).default(''),
   price: z.string().trim().max(40).default(''),
   serviceDate: z.number().int().nullable().optional(),
+  expiryHours: z.number().int().min(1).max(8760).optional(),
   location: z.string().trim().max(500).default(''),
   media: mediaSchema,
   postedAs: z.enum(['buyer', 'supplier']).default('supplier'),
@@ -93,6 +96,7 @@ export const submitListingOfferBodySchema = z.object({
       .min(1)
       .max(40)
       .regex(/^\d+(\.\d{1,2})?$/, 'Enter a valid amount'),
+    units: z.number().int().min(1).max(9999).optional(),
   }),
 });
 

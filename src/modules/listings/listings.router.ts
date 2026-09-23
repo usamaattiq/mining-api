@@ -33,6 +33,11 @@ listingsRouter.get(
   wrap((req, res) => listingController.listMyOffers(req, res)),
 );
 
+listingsRouter.get(
+  '/rfq-health',
+  wrap((req, res) => listingController.rfqHealth(req, res)),
+);
+
 listingsRouter.post(
   '/',
   validate(createListingBodySchema),
@@ -61,6 +66,12 @@ listingsRouter.post(
   '/:id/offers/:offerId/decline',
   validate(listingOfferActionParamsSchema),
   wrap((req, res) => listingController.declineOffer(req, res)),
+);
+
+listingsRouter.post(
+  '/:id/offers/:offerId/withdraw',
+  validate(listingOfferActionParamsSchema),
+  wrap((req, res) => listingController.withdrawOffer(req, res)),
 );
 
 listingsRouter.post(
