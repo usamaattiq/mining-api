@@ -28,6 +28,7 @@ const equipmentBodySchema = z.object({
   deliveryPricePerKm: z.string().trim().max(40).default(''),
   postedAs: z.enum(['buyer', 'supplier']).default('supplier'),
   neededDate: z.number().int().nullable().optional(),
+  expiryHours: z.number().int().min(1).max(8760).optional(),
 });
 
 const serviceBodySchema = z.object({
@@ -39,6 +40,7 @@ const serviceBodySchema = z.object({
   yearsOfExperience: z.string().trim().max(20).default(''),
   price: z.string().trim().max(40).default(''),
   serviceDate: z.number().int().nullable().optional(),
+  expiryHours: z.number().int().min(1).max(8760).optional(),
   location: z.string().trim().max(500).default(''),
   media: mediaSchema,
   postedAs: z.enum(['buyer', 'supplier']).default('supplier'),

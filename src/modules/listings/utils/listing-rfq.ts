@@ -115,6 +115,7 @@ export async function attachRfqStatuses(
 
 export async function createListingRfq(
   listing: ListingWithMedia,
+  expiryHours = 24,
 ): Promise<{ listing: ListingWithMedia; snapshot?: RfqSnapshot }> {
   if (!rfqClient.isConfigured()) return { listing };
   if (
@@ -131,7 +132,7 @@ export async function createListingRfq(
       listingId: listing.id,
       totalQuantity: listing.category === 'equipment' ? Math.max(listing.units ?? 1, 1) : 1,
       enforceCapacityLimit: false,
-      expiryHours: 24,
+      expiryHours: Math.min(8760, Math.max(1, Math.round(expiryHours) || 24)),
     });
     const updated = await listingRepository.setRfqId(listing.id, snapshot.id);
     return { listing: updated, snapshot };

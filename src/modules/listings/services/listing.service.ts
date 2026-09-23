@@ -165,7 +165,11 @@ class ListingService {
       })
       .catch(() => undefined);
 
-    const { listing: withRfqRow, snapshot } = await createListingRfq(listing);
+    const expiryHours =
+      input.category === 'equipment' || input.category === 'services'
+        ? input.expiryHours
+        : undefined;
+    const { listing: withRfqRow, snapshot } = await createListingRfq(listing, expiryHours);
     return withRfq(toListingDto(withRfqRow), snapshot);
   }
 
