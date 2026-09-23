@@ -130,7 +130,7 @@ export async function createListingRfq(
       ownerId: listing.ownerId,
       listingId: listing.id,
       totalQuantity: listing.category === 'equipment' ? Math.max(listing.units ?? 1, 1) : 1,
-      enforceCapacityLimit: true,
+      enforceCapacityLimit: false,
       expiryHours: 24,
     });
     const updated = await listingRepository.setRfqId(listing.id, snapshot.id);

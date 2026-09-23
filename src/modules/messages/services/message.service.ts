@@ -9,6 +9,7 @@ import { messageRepository } from '../repositories/message.repository';
 import type { ConversationDto } from '../types/message.types';
 import { toConversationDto } from '../utils/conversation.mapper';
 import { emitChatMessage } from '../../../realtime/chat.emitter';
+import { rfqClient } from '../../../integrations/rfq/rfq.client';
 
 function assertParticipant(buyerId: string, sellerId: string, userId: string): void {
   if (buyerId !== userId && sellerId !== userId) {
@@ -35,13 +36,43 @@ class MessageService {
     return toConversationDto(conversation, userId);
   }
 
-  async startConversation(userId: string, listingId: string): Promise<ConversationDto> {
+  async startConversation(
+    userId: string,
+    listingId: string,
+    buyerId?: string,
+  ): Promise<ConversationDto> {
     const listing = await listingRepository.findById(listingId);
     if (!listing || listing.status !== 'ACTIVE') {
       throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
     }
     if (listing.ownerId === userId) {
-      throw new AppError('Cannot message your own listing', 400, ErrorCode.VALIDATION_ERROR);
+      if (!buyerId || !listing.rfqId) {
+        throw new AppError('Cannot message your own listing', 400, ErrorCode.VALIDATION_ERROR);
+      }
+      const snapshot = await rfqClient.getSnapshot(listing.rfqId, userId);
+      const confirmed = (snapshot.offers ?? []).some((offer) => {
+        const responderId = String(offer.responder_id ?? offer.responderId ?? '');
+        return (
+          responderId === buyerId && (offer.status === 'selected' || offer.status === 'confirmed')
+        );
+      });
+      if (!confirmed) {
+        throw new AppError(
+          'Messaging opens after the offer is confirmed',
+          403,
+          ErrorCode.FORBIDDEN,
+        );
+      }
+      const existing = await conversationRepository.findByListingAndBuyer(listingId, buyerId);
+      if (existing) {
+        return toConversationDto(existing, userId);
+      }
+      const created = await conversationRepository.create({
+        listingId,
+        buyerId,
+        sellerId: userId,
+      });
+      return toConversationDto(created, userId);
     }
 
     const existing = await conversationRepository.findByListingAndBuyer(listingId, userId);

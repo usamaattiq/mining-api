@@ -33,6 +33,11 @@ listingsRouter.get(
   wrap((req, res) => listingController.listMyOffers(req, res)),
 );
 
+listingsRouter.get(
+  '/rfq-health',
+  wrap((req, res) => listingController.rfqHealth(req, res)),
+);
+
 listingsRouter.post(
   '/',
   validate(createListingBodySchema),

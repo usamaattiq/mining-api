@@ -134,6 +134,10 @@ function listingCreateData(ownerId: string, input: CreateListingBody): Prisma.Li
 
 class ListingService {
   async create(ownerId: string, input: CreateListingBody): Promise<ListingDto> {
+    if (!(await rfqClient.isReachable())) {
+      throw new AppError('RFQ Management System Down', 503, ErrorCode.INTERNAL_ERROR);
+    }
+
     const listing = await runInTransaction(async (tx) => {
       const created = await listingRepository.create(listingCreateData(ownerId, input), tx);
       await inboxRepository.create(
@@ -249,8 +253,8 @@ class ListingService {
         rfqId: listing.rfqId,
         responderId: viewerId,
         price: totalPrice,
-        capacityMode: 'full',
-        ...(units != null ? { offeredQuantity: units } : {}),
+        capacityMode: 'partial',
+        offeredQuantity: units ?? 1,
       });
     } catch (error) {
       mapRfqError(error, 'Could not submit offer');

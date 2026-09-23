@@ -24,6 +24,21 @@ class RfqClient {
     return Boolean(env.RFQ_BASE_URL?.trim() && env.RFQ_API_KEY?.trim());
   }
 
+  /** True when RMS accepts a connection. Any HTTP response counts as up. */
+  async isReachable(): Promise<boolean> {
+    if (!this.isConfigured()) return false;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2500);
+    try {
+      await fetch(`${this.apiRoot}/health`, { signal: controller.signal });
+      return true;
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
   private get apiRoot(): string {
     return (env.RFQ_BASE_URL ?? '').replace(/\/+$/, '');
   }
