@@ -212,7 +212,7 @@ class ListingService {
       attachedAuctionIdsForViewer(viewerId),
     ]);
     return listings.filter((listing) => {
-      if (!('rfq' in listing) || !listing.rfq) return true;
+      if (!('rfq' in listing) || listing.rfq?.status !== 'live') return false;
       if (listing.category === 'gold') return !hideAuctionIds.has(listing.rfq.id);
       return !hideRfqIds.has(listing.rfq.id);
     });
