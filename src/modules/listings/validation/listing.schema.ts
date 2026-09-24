@@ -53,6 +53,7 @@ const goldBodySchema = z.object({
   weight: z.string().trim().max(40).default(''),
   purityLabel: z.string().trim().max(80).default(''),
   price: z.string().trim().max(40).default(''),
+  auctionStartDate: z.number().int().nullable().optional(),
   auctionEndDate: z.number().int().nullable().optional(),
   location: z.string().trim().max(500).default(''),
   media: mediaSchema,

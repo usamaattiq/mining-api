@@ -9,6 +9,8 @@ import { messageRepository } from '../repositories/message.repository';
 import type { ConversationDto } from '../types/message.types';
 import { toConversationDto } from '../utils/conversation.mapper';
 import { emitChatMessage, emitChatRead } from '../../../realtime/chat.emitter';
+import { auctionClient } from '../../../integrations/auction/auction.client';
+import { auctionSnapshotToRfq } from '../../listings/utils/listing-rfq';
 import { rfqClient } from '../../../integrations/rfq/rfq.client';
 
 function assertParticipant(buyerId: string, sellerId: string, userId: string): void {
@@ -49,7 +51,10 @@ class MessageService {
       if (!buyerId || !listing.rfqId) {
         throw new AppError('Cannot message your own listing', 400, ErrorCode.VALIDATION_ERROR);
       }
-      const snapshot = await rfqClient.getSnapshot(listing.rfqId, userId);
+      const snapshot =
+        listing.category === 'gold'
+          ? auctionSnapshotToRfq(await auctionClient.getSnapshot(listing.rfqId, userId))
+          : await rfqClient.getSnapshot(listing.rfqId, userId);
       const confirmed = (snapshot.offers ?? []).some((offer) => {
         const responderId = String(offer.responder_id ?? offer.responderId ?? '');
         return (

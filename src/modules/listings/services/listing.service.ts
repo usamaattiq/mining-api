@@ -3,6 +3,7 @@ import { prisma } from '../../../common/database/prisma';
 import { runInTransaction } from '../../../common/database/transaction';
 import { AppError } from '../../../common/errors/app-error';
 import { ErrorCode } from '../../../common/errors/error-codes';
+import { auctionClient } from '../../../integrations/auction/auction.client';
 import { rfqClient, RfqApiError } from '../../../integrations/rfq/rfq.client';
 import { inboxRepository } from '../../notifications/repositories/inbox.repository';
 import { notifyService } from '../../notifications/services/notify.service';
@@ -11,6 +12,7 @@ import type { ListingDto } from '../types/listing.types';
 import {
   attachRfqStatuses,
   attachedRfqIdsForViewer,
+  auctionSnapshotToRfq,
   createListingRfq,
   snapshotHasAttachedOffer,
   withRfq,
@@ -134,7 +136,11 @@ function listingCreateData(ownerId: string, input: CreateListingBody): Prisma.Li
 
 class ListingService {
   async create(ownerId: string, input: CreateListingBody): Promise<ListingDto> {
-    if (!(await rfqClient.isReachable())) {
+    if (input.category === 'gold') {
+      if (!(await auctionClient.isReachable())) {
+        throw new AppError('Auction service is down', 503, ErrorCode.INTERNAL_ERROR);
+      }
+    } else if (!(await rfqClient.isReachable())) {
       throw new AppError('RFQ Management System Down', 503, ErrorCode.INTERNAL_ERROR);
     }
 
@@ -169,7 +175,19 @@ class ListingService {
       input.category === 'equipment' || input.category === 'services'
         ? input.expiryHours
         : undefined;
-    const { listing: withRfqRow, snapshot } = await createListingRfq(listing, expiryHours);
+    const schedule =
+      input.category === 'gold'
+        ? {
+            startsAt: input.auctionStartDate ?? null,
+            endsAt: input.auctionEndDate ?? null,
+            startingAmount: Number(input.price) || 1,
+          }
+        : undefined;
+    const { listing: withRfqRow, snapshot } = await createListingRfq(
+      listing,
+      expiryHours,
+      schedule,
+    );
     return withRfq(toListingDto(withRfqRow), snapshot);
   }
 
@@ -189,27 +207,40 @@ class ListingService {
       category: query.category,
     });
     const listings = await attachRfqStatuses(rows.map(toListingDto), rows, viewerId);
-    const hideRfqIds = await attachedRfqIdsForViewer(viewerId);
+    const [hideRfqIds, hideAuctionIds] = await Promise.all([
+      attachedRfqIdsForViewer(viewerId),
+      attachedAuctionIdsForViewer(viewerId),
+    ]);
     return listings.filter((listing) => {
       if (!('rfq' in listing) || !listing.rfq) return true;
+      if (listing.category === 'gold') return !hideAuctionIds.has(listing.rfq.id);
       return !hideRfqIds.has(listing.rfq.id);
     });
   }
 
   async listMyOffers(viewerId: string): Promise<ListingDto[]> {
-    if (!rfqClient.isConfigured()) return [];
     let snapshots: Awaited<ReturnType<typeof rfqClient.listForResponder>> = [];
-    try {
-      snapshots = await rfqClient.listForResponder(viewerId);
-    } catch {
-      return [];
+    if (rfqClient.isConfigured()) {
+      try {
+        snapshots = await rfqClient.listForResponder(viewerId);
+      } catch {
+        snapshots = [];
+      }
     }
+    const auctionSnapshots = auctionClient.isConfigured()
+      ? await auctionClient.listForParticipant(viewerId).catch(() => [])
+      : [];
+    const attachedAuctions = auctionSnapshots
+      .map(auctionSnapshotToRfq)
+      .filter(snapshotHasAttachedOffer);
     const attached = snapshots.filter(snapshotHasAttachedOffer);
+    const linked = [...attached, ...attachedAuctions];
+    if (linked.length === 0) return [];
     const rows = await listingRepository.findOffered({
-      listingIds: attached
+      listingIds: linked
         .map((snapshot) => snapshot.external_ref)
         .filter((id): id is string => Boolean(id)),
-      rfqIds: attached.map((snapshot) => snapshot.id),
+      rfqIds: linked.map((snapshot) => snapshot.id),
     });
     return attachRfqStatuses(rows.map(toListingDto), rows, viewerId);
   }
@@ -253,13 +284,21 @@ class ListingService {
           : undefined;
       const unitPrice = Number(input.price);
       const totalPrice = units != null ? Math.round(unitPrice * units * 100) / 100 : unitPrice;
-      await rfqClient.submitOffer({
-        rfqId: listing.rfqId,
-        responderId: viewerId,
-        price: totalPrice,
-        capacityMode: 'partial',
-        offeredQuantity: units ?? 1,
-      });
+      if (listing.category === 'gold') {
+        const amount = Math.round(totalPrice);
+        if (!Number.isFinite(amount) || amount < 1) {
+          throw new AppError('Enter a bid of at least 1', 400, ErrorCode.VALIDATION_ERROR);
+        }
+        await auctionClient.placeBid(listing.rfqId, viewerId, amount);
+      } else {
+        await rfqClient.submitOffer({
+          rfqId: listing.rfqId,
+          responderId: viewerId,
+          price: totalPrice,
+          capacityMode: 'partial',
+          offeredQuantity: units ?? 1,
+        });
+      }
     } catch (error) {
       mapRfqError(error, 'Could not submit offer');
     }
@@ -302,19 +341,34 @@ class ListingService {
 
     let responderId: string | undefined;
     try {
-      const snapshot = await rfqClient.getSnapshot(listing.rfqId, viewerId);
-      const offer = [...(snapshot.offers ?? []), ...(snapshot.my_offers ?? [])].find(
-        (row) => String(row.id) === offerId,
-      );
-      responderId = offer ? String(offer.responder_id ?? offer.responderId ?? '') : undefined;
-      await rfqClient.decideOffer({
-        rfqId: listing.rfqId,
-        offerId,
-        actorId: viewerId,
-        action,
-      });
-      if (action === 'confirm') {
-        await rfqClient.completeRfq(listing.rfqId, listing.ownerId).catch(() => undefined);
+      if (listing.category === 'gold') {
+        const snapshot = auctionSnapshotToRfq(
+          await auctionClient.getSnapshot(listing.rfqId, viewerId),
+        );
+        const offer = (snapshot.offers ?? []).find((row) => String(row.id) === offerId);
+        responderId = offer ? String(offer.responder_id ?? offer.responderId ?? '') : undefined;
+        if (action === 'select') {
+          await auctionClient.ownerAction(listing.rfqId, viewerId, 'select-next');
+        } else if (action === 'reject') {
+          await auctionClient.ownerAction(listing.rfqId, viewerId, 'close');
+        } else {
+          await auctionClient.participantAction(listing.rfqId, viewerId, action);
+        }
+      } else {
+        const snapshot = await rfqClient.getSnapshot(listing.rfqId, viewerId);
+        const offer = [...(snapshot.offers ?? []), ...(snapshot.my_offers ?? [])].find(
+          (row) => String(row.id) === offerId,
+        );
+        responderId = offer ? String(offer.responder_id ?? offer.responderId ?? '') : undefined;
+        await rfqClient.decideOffer({
+          rfqId: listing.rfqId,
+          offerId,
+          actorId: viewerId,
+          action,
+        });
+        if (action === 'confirm') {
+          await rfqClient.completeRfq(listing.rfqId, listing.ownerId).catch(() => undefined);
+        }
       }
     } catch (error) {
       mapRfqError(error, `Could not ${action} offer`);
@@ -363,6 +417,21 @@ class ListingService {
     }
 
     return this.getById(listingId, viewerId);
+  }
+}
+
+async function attachedAuctionIdsForViewer(viewerId: string): Promise<Set<string>> {
+  if (!auctionClient.isConfigured()) return new Set();
+  try {
+    const snapshots = await auctionClient.listForParticipant(viewerId);
+    return new Set(
+      snapshots
+        .map(auctionSnapshotToRfq)
+        .filter(snapshotHasAttachedOffer)
+        .map((snapshot) => snapshot.id),
+    );
+  } catch {
+    return new Set();
   }
 }
 
