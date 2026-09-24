@@ -34,6 +34,7 @@ export type ListingRfqDto = {
   statusLabel: string;
   statusVariant: 'muted' | 'accent' | 'warning' | 'success';
   expiresAt: number | null;
+  currentPrice?: string;
   offersCount?: number;
   canSubmitOffer?: boolean;
   canDecideOffers?: boolean;

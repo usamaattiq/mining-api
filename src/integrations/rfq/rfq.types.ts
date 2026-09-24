@@ -18,6 +18,7 @@ export type RfqSnapshot = {
   status_variant: RfqStatusVariant;
   external_ref?: string | null;
   expires_at?: string | null;
+  current_amount?: number | null;
   offers?: RfqOfferSummary[];
   my_offers?: RfqOfferSummary[];
   is_leading?: boolean;

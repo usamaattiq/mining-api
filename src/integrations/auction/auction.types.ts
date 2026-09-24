@@ -14,6 +14,7 @@ export type AuctionSnapshot = {
   status_variant: RfqStatusVariant;
   external_ref?: string | null;
   ends_at?: string | null;
+  current_amount?: number | null;
   selected_participant_id?: string | null;
   has_participated?: boolean;
   participant_status?: string | null;
