@@ -53,6 +53,7 @@ function mapOffer(offer: RfqOfferSummary): ListingRfqOfferDto {
     status: offer.status,
     ...(offer.price != null ? { price: String(offer.price) } : {}),
     ...(quantity != null ? { quantity } : {}),
+    ...(offer.rank != null ? { rank: offer.rank } : {}),
   };
 }
 
@@ -75,6 +76,7 @@ export function auctionSnapshotToRfq(snapshot: AuctionSnapshot): RfqSnapshot {
     responder_id: String(row.participant_id),
     status: String(row.participant_id) === selectedId ? 'selected' : 'active',
     price: row.peak_amount,
+    rank: row.rank,
   }));
   const myOffers =
     snapshot.has_participated || snapshot.my_peak_amount != null
@@ -95,6 +97,7 @@ export function auctionSnapshotToRfq(snapshot: AuctionSnapshot): RfqSnapshot {
     expires_at: snapshot.ends_at,
     ...(offers.length > 0 ? { offers } : {}),
     ...(myOffers.length > 0 ? { my_offers: myOffers } : {}),
+    ...(snapshot.is_leading != null ? { is_leading: snapshot.is_leading } : {}),
     actions: {
       can_submit_offer: snapshot.actions?.can_place_bid,
       can_select: snapshot.actions?.can_select_next,
@@ -134,6 +137,7 @@ export function toListingRfqDto(snapshot: RfqSnapshot): ListingRfqDto {
           ...(mappedMyOffer.quantity != null ? { myOfferQuantity: mappedMyOffer.quantity } : {}),
         }
       : {}),
+    ...(snapshot.is_leading ? { isLeading: true } : {}),
     ...(offers ? { offers } : {}),
   };
 }

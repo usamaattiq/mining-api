@@ -7,6 +7,7 @@ export type RfqOfferSummary = {
   status: string;
   price?: string | number | null;
   offered_quantity?: string | number | null;
+  rank?: number;
 };
 
 export type RfqSnapshot = {
@@ -19,6 +20,7 @@ export type RfqSnapshot = {
   expires_at?: string | null;
   offers?: RfqOfferSummary[];
   my_offers?: RfqOfferSummary[];
+  is_leading?: boolean;
   actions?: {
     can_submit_offer?: boolean;
     can_select?: boolean;
