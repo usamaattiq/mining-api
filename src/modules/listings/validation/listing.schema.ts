@@ -104,7 +104,7 @@ export const submitListingOfferBodySchema = z.object({
 export const listingOfferActionParamsSchema = z.object({
   params: z.object({
     id: z.string().uuid(),
-    offerId: z.string().uuid(),
+    offerId: z.string().trim().min(1).max(64),
   }),
 });
 
