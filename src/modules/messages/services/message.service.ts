@@ -55,13 +55,13 @@ class MessageService {
         listing.category === 'gold'
           ? auctionSnapshotToRfq(await auctionClient.getSnapshot(listing.rfqId, userId))
           : await rfqClient.getSnapshot(listing.rfqId, userId);
-      const confirmed = (snapshot.offers ?? []).some((offer) => {
+      const canMessage = (snapshot.offers ?? []).some((offer) => {
         const responderId = String(offer.responder_id ?? offer.responderId ?? '');
-        return (
-          responderId === buyerId && (offer.status === 'selected' || offer.status === 'confirmed')
-        );
+        if (responderId !== buyerId) return false;
+        if (listing.category === 'gold') return true;
+        return offer.status === 'selected' || offer.status === 'confirmed';
       });
-      if (!confirmed) {
+      if (!canMessage) {
         throw new AppError(
           'Messaging opens after the offer is confirmed',
           403,
