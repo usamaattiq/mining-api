@@ -12,13 +12,14 @@ const mediaSchema = z.array(mediaItemSchema).max(20).default([]);
 
 const equipmentBodySchema = z.object({
   category: z.literal('equipment'),
-  mode: z.enum(['rent', 'sell']),
+  mode: z.enum(['rent', 'sell', 'both']),
   equipmentTypeLabel: z.string().trim().min(1).max(150),
   title: z.string().trim().min(1).max(200),
   description: z.string().trim().max(5000).default(''),
   hourlyRental: z.string().trim().max(40).default(''),
   monthlyRental: z.string().trim().max(40).default(''),
   weeklyRental: z.string().trim().max(40).default(''),
+  yearlyRental: z.string().trim().max(40).default(''),
   salePrice: z.string().trim().max(40).default(''),
   units: z.number().int().min(1).max(9999).default(1),
   location: z.string().trim().max(500).default(''),

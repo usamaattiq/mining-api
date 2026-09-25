@@ -44,6 +44,7 @@ export function toListingDto(listing: ListingWithMedia): ListingDto {
       hourlyRental: listing.hourlyRental ?? '',
       monthlyRental: listing.monthlyRental ?? '',
       weeklyRental: listing.weeklyRental ?? '',
+      yearlyRental: listing.yearlyRental ?? '',
       salePrice: listing.salePrice ?? '',
       units: listing.units ?? 1,
       location: listing.location,

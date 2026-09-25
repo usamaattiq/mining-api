@@ -91,6 +91,7 @@ function listingCreateData(ownerId: string, input: CreateListingBody): Prisma.Li
       hourlyRental: input.hourlyRental,
       monthlyRental: input.monthlyRental,
       weeklyRental: input.weeklyRental,
+      yearlyRental: input.yearlyRental,
       salePrice: input.salePrice,
       units: input.units,
       deliveryAvailable: input.deliveryAvailable,

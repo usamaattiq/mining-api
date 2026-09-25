@@ -53,13 +53,14 @@ export type EquipmentListingDto = {
   id: string;
   ownerId: string;
   category: 'equipment';
-  mode: 'rent' | 'sell';
+  mode: 'rent' | 'sell' | 'both';
   equipmentTypeLabel: string;
   title: string;
   description: string;
   hourlyRental: string;
   monthlyRental: string;
   weeklyRental: string;
+  yearlyRental: string;
   salePrice: string;
   units: number;
   location: string;

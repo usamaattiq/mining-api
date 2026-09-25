@@ -137,6 +137,7 @@ enum ListingStatus {
 enum EquipmentMode {
   rent
   sell
+  both
 }
 
 enum ServiceListingType {
@@ -182,6 +183,7 @@ model Listing {
   hourlyRental         String?
   monthlyRental        String?
   weeklyRental         String?
+  yearlyRental         String?
   salePrice            String?
   units                Int?
   deliveryAvailable    Boolean?
