@@ -5,6 +5,7 @@ import { authenticateUser } from '../auth/middleware/authenticate-user';
 import { listingController } from './controllers/listing.controller';
 import {
   createListingBodySchema,
+  equipmentStockReturnParamsSchema,
   listingIdParamsSchema,
   listingOfferActionParamsSchema,
   listFeedQuerySchema,
@@ -78,6 +79,18 @@ listingsRouter.post(
   '/:id/offers',
   validate(listingIdParamsSchema.merge(submitListingOfferBodySchema)),
   wrap((req, res) => listingController.submitOffer(req, res)),
+);
+
+listingsRouter.get(
+  '/:id/stock',
+  validate(listingIdParamsSchema),
+  wrap((req, res) => listingController.listEquipmentStock(req, res)),
+);
+
+listingsRouter.post(
+  '/:id/stock/:holdId/return',
+  validate(equipmentStockReturnParamsSchema),
+  wrap((req, res) => listingController.returnRentedUnits(req, res)),
 );
 
 listingsRouter.get(

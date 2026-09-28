@@ -41,6 +41,18 @@ export const listingController = {
     sendSuccess(res, 200, listings);
   },
 
+  async listEquipmentStock(req: AuthenticatedRequest, res: Response) {
+    const params = req.validatedParams as ListingIdParams;
+    const stock = await listingService.listEquipmentStock(params.id, req.user!.id);
+    sendSuccess(res, 200, stock);
+  },
+
+  async returnRentedUnits(req: AuthenticatedRequest, res: Response) {
+    const params = req.validatedParams as ListingIdParams & { holdId: string };
+    const stock = await listingService.returnRentedUnits(params.id, params.holdId, req.user!.id);
+    sendSuccess(res, 200, stock);
+  },
+
   async getById(req: AuthenticatedRequest, res: Response) {
     const params = req.validatedParams as ListingIdParams;
     const listing = await listingService.getById(params.id, req.user!.id);

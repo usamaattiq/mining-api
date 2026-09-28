@@ -19,6 +19,7 @@ export type AuctionSnapshot = {
   has_participated?: boolean;
   participant_status?: string | null;
   my_peak_amount?: number | null;
+  is_leading?: boolean;
   ranking?: AuctionRank[];
   actions?: {
     can_place_bid?: boolean;

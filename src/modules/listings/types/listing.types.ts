@@ -26,6 +26,7 @@ export type ListingRfqOfferDto = {
   price?: string;
   quantity?: number;
   rank?: number;
+  kind?: 'rent' | 'sale';
 };
 
 export type ListingRfqDto = {
@@ -45,6 +46,7 @@ export type ListingRfqDto = {
   myOfferStatus?: string;
   myOfferPrice?: string;
   myOfferQuantity?: number;
+  myOfferKind?: 'rent' | 'sale';
   isLeading?: boolean;
   offers?: ListingRfqOfferDto[];
 };
@@ -63,6 +65,8 @@ export type EquipmentListingDto = {
   yearlyRental: string;
   salePrice: string;
   units: number;
+  /** Units still in the catalog after accepted sales and active rentals. */
+  availableUnits?: number;
   location: string;
   media: ListingMediaDto[];
   deliveryAvailable: boolean;

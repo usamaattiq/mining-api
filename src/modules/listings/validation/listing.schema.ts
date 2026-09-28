@@ -99,6 +99,14 @@ export const submitListingOfferBodySchema = z.object({
       .max(40)
       .regex(/^\d+(\.\d{1,2})?$/, 'Enter a valid amount'),
     units: z.number().int().min(1).max(9999).optional(),
+    fulfillment: z.enum(['rent', 'sale']).optional(),
+  }),
+});
+
+export const equipmentStockReturnParamsSchema = z.object({
+  params: z.object({
+    id: z.string().uuid(),
+    holdId: z.string().uuid(),
   }),
 });
 

@@ -213,6 +213,9 @@ export async function createListingRfq(
   if (listing.category === 'gold') {
     return createGoldAuction(listing, schedule);
   }
+  if (listing.category === 'equipment' && listing.postedAs === 'supplier') {
+    return { listing };
+  }
   if (!rfqClient.isConfigured()) return { listing };
   if (
     listing.category !== 'equipment' &&
@@ -228,7 +231,10 @@ export async function createListingRfq(
       listingId: listing.id,
       totalQuantity: listing.category === 'equipment' ? Math.max(listing.units ?? 1, 1) : 1,
       enforceCapacityLimit: false,
-      expiryHours: Math.min(8760, Math.max(1, Math.round(expiryHours) || 24)),
+      expiryHours:
+        listing.category === 'equipment' && listing.postedAs === 'supplier'
+          ? 8760
+          : Math.min(8760, Math.max(1, Math.round(expiryHours) || 24)),
     });
     const updated = await listingRepository.setRfqId(listing.id, snapshot.id);
     return { listing: updated, snapshot };

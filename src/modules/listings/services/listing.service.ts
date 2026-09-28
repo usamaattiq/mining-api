@@ -18,6 +18,12 @@ import {
   withRfq,
 } from '../utils/listing-rfq';
 import { notifyListingRfq } from '../utils/listing-rfq-notify';
+import {
+  availableUnitsFor,
+  isSupplierEquipment,
+  resolveDealKind,
+  withEquipmentAvailability,
+} from '../utils/equipment-stock';
 import { toListingDto } from '../utils/listing.mapper';
 import type {
   CreateListingBody,
@@ -189,7 +195,11 @@ class ListingService {
       expiryHours,
       schedule,
     );
-    return withRfq(toListingDto(withRfqRow), snapshot);
+    const [withStock] = await withEquipmentAvailability(
+      [withRfq(toListingDto(withRfqRow), snapshot)],
+      ownerId,
+    );
+    return withStock ?? withRfq(toListingDto(withRfqRow), snapshot);
   }
 
   async listMine(ownerId: string, query: ListListingsQuery): Promise<ListingDto[]> {
@@ -198,7 +208,10 @@ class ListingService {
       postedAs: query.postedAs,
       category: query.category,
     });
-    return attachRfqStatuses(rows.map(toListingDto), rows, ownerId);
+    return withEquipmentAvailability(
+      await attachRfqStatuses(rows.map(toListingDto), rows, ownerId),
+      ownerId,
+    );
   }
 
   async listFeed(viewerId: string, query: ListFeedQuery): Promise<ListingDto[]> {
@@ -207,13 +220,27 @@ class ListingService {
       excludeOwnerId: viewerId,
       category: query.category,
     });
-    const listings = await attachRfqStatuses(rows.map(toListingDto), rows, viewerId);
+    const listings = await withEquipmentAvailability(
+      await attachRfqStatuses(rows.map(toListingDto), rows, viewerId),
+      viewerId,
+    );
     const [hideRfqIds, hideAuctionIds] = await Promise.all([
       attachedRfqIdsForViewer(viewerId),
       attachedAuctionIdsForViewer(viewerId),
     ]);
+    const offeredEquipment = new Set(
+      (
+        await prisma.equipmentHold.findMany({
+          where: { buyerId: viewerId, status: { in: ['pending', 'selected', 'active'] } },
+          select: { listingId: true },
+        })
+      ).map((hold) => hold.listingId),
+    );
     return listings.filter((listing) => {
       if (!('rfq' in listing) || listing.rfq?.status !== 'live') return false;
+      if (listing.category === 'equipment' && listing.postedAs === 'supplier') {
+        return !offeredEquipment.has(listing.id);
+      }
       if (listing.category === 'gold') return !hideAuctionIds.has(listing.rfq.id);
       return !hideRfqIds.has(listing.rfq.id);
     });
@@ -236,14 +263,30 @@ class ListingService {
       .filter(snapshotHasAttachedOffer);
     const attached = snapshots.filter(snapshotHasAttachedOffer);
     const linked = [...attached, ...attachedAuctions];
-    if (linked.length === 0) return [];
+    const localHolds = await prisma.equipmentHold.findMany({
+      where: { buyerId: viewerId, status: { in: ['pending', 'selected', 'active'] } },
+      select: { listingId: true },
+    });
+    if (linked.length === 0 && localHolds.length === 0) return [];
     const rows = await listingRepository.findOffered({
-      listingIds: linked
-        .map((snapshot) => snapshot.external_ref)
-        .filter((id): id is string => Boolean(id)),
+      listingIds: [
+        ...linked
+          .map((snapshot) => snapshot.external_ref)
+          .filter((id): id is string => Boolean(id)),
+        ...localHolds.map((hold) => hold.listingId),
+      ],
       rfqIds: linked.map((snapshot) => snapshot.id),
     });
-    return attachRfqStatuses(rows.map(toListingDto), rows, viewerId);
+    const listings = await withEquipmentAvailability(
+      await attachRfqStatuses(rows.map(toListingDto), rows, viewerId),
+      viewerId,
+    );
+    return listings.filter((listing) => {
+      if (listing.category === 'equipment' && listing.postedAs === 'supplier') {
+        return Boolean(listing.rfq?.myOfferId);
+      }
+      return true;
+    });
   }
 
   async getById(id: string, viewerId: string): Promise<ListingDto> {
@@ -255,7 +298,9 @@ class ListingService {
     if (!dto) {
       throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
     }
-    return withOfferNames(dto);
+    const named = await withOfferNames(dto);
+    const [withStock] = await withEquipmentAvailability([named], viewerId);
+    return withStock ?? named;
   }
 
   async submitOffer(
@@ -267,6 +312,12 @@ class ListingService {
     if (!listing || listing.status !== 'ACTIVE') {
       throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
     }
+    if (listing.ownerId === viewerId) {
+      throw new AppError('You cannot offer on your own listing', 400, ErrorCode.FORBIDDEN);
+    }
+    if (isSupplierEquipment(listing)) {
+      return this.submitEquipmentOffer(listing, viewerId, input);
+    }
     if (!listing.rfqId) {
       throw new AppError(
         'Offers are not available for this listing',
@@ -274,15 +325,35 @@ class ListingService {
         ErrorCode.VALIDATION_ERROR,
       );
     }
-    if (listing.ownerId === viewerId) {
-      throw new AppError('You cannot offer on your own listing', 400, ErrorCode.FORBIDDEN);
-    }
 
     try {
+      const catalogUnits = Math.max(listing.units ?? 1, 1);
+      const available =
+        listing.category === 'equipment'
+          ? await availableUnitsFor(listing.id, catalogUnits)
+          : catalogUnits;
+      if (listing.category === 'equipment' && available < 1) {
+        throw new AppError('No units left on this listing', 400, ErrorCode.VALIDATION_ERROR);
+      }
       const units =
         listing.category === 'equipment'
-          ? Math.min(Math.max(input.units ?? 1, 1), Math.max(listing.units ?? 1, 1))
+          ? Math.min(Math.max(input.units ?? 1, 1), available)
           : undefined;
+      if (
+        isSupplierEquipment(listing) &&
+        listing.equipmentMode === 'both' &&
+        input.fulfillment !== 'rent' &&
+        input.fulfillment !== 'sale'
+      ) {
+        throw new AppError('Choose rent or sale for this offer', 400, ErrorCode.VALIDATION_ERROR);
+      }
+      if (listing.category === 'equipment' && (input.units ?? 1) > available) {
+        throw new AppError(
+          `Only ${available} units are still available`,
+          400,
+          ErrorCode.VALIDATION_ERROR,
+        );
+      }
       const unitPrice = Number(input.price);
       const totalPrice = units != null ? Math.round(unitPrice * units * 100) / 100 : unitPrice;
       if (listing.category === 'gold') {
@@ -301,6 +372,7 @@ class ListingService {
         });
       }
     } catch (error) {
+      if (error instanceof AppError) throw error;
       mapRfqError(error, 'Could not submit offer');
     }
 
@@ -324,6 +396,9 @@ class ListingService {
     const listing = await listingRepository.findById(listingId);
     if (!listing || listing.status !== 'ACTIVE') {
       throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
+    }
+    if (isSupplierEquipment(listing)) {
+      return this.decideEquipmentOffer(listing, viewerId, offerId, action);
     }
     if (!listing.rfqId) {
       throw new AppError(
@@ -372,6 +447,7 @@ class ListingService {
         }
       }
     } catch (error) {
+      if (error instanceof AppError) throw error;
       mapRfqError(error, `Could not ${action} offer`);
     }
 
@@ -419,6 +495,187 @@ class ListingService {
 
     return this.getById(listingId, viewerId);
   }
+
+  async listEquipmentStock(listingId: string, viewerId: string) {
+    const listing = await requireSupplierEquipment(listingId, viewerId);
+    const holds = await prisma.equipmentHold.findMany({
+      where: { listingId, status: { in: ['selected', 'active', 'returned'] } },
+      include: { buyer: { select: { fullName: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    const active = holds.filter((hold) => hold.status === 'active' || hold.status === 'selected');
+    const reserved = active.reduce((sum, hold) => sum + hold.units, 0);
+    const totalUnits = Math.max(listing.units ?? 1, 1);
+    return {
+      totalUnits,
+      availableUnits: Math.max(0, totalUnits - reserved),
+      rentUnits: active
+        .filter((hold) => hold.kind === 'rent')
+        .reduce((sum, hold) => sum + hold.units, 0),
+      saleUnits: active
+        .filter((hold) => hold.kind === 'sale')
+        .reduce((sum, hold) => sum + hold.units, 0),
+      holds: holds.map((hold) => ({
+        id: hold.id,
+        kind: hold.kind,
+        units: hold.units,
+        status: hold.status,
+        buyerName: hold.buyer.fullName,
+        createdAt: hold.createdAt.getTime(),
+      })),
+    };
+  }
+
+  async returnRentedUnits(listingId: string, holdId: string, viewerId: string) {
+    await requireSupplierEquipment(listingId, viewerId);
+    const hold = await prisma.equipmentHold.findFirst({
+      where: { id: holdId, listingId, kind: 'rent', status: 'active' },
+    });
+    if (!hold) {
+      throw new AppError('Rented units were not found', 404, ErrorCode.NOT_FOUND);
+    }
+    await prisma.equipmentHold.update({
+      where: { id: hold.id },
+      data: { status: 'returned' },
+    });
+    return this.listEquipmentStock(listingId, viewerId);
+  }
+
+  private async submitEquipmentOffer(
+    listing: NonNullable<Awaited<ReturnType<typeof listingRepository.findById>>>,
+    viewerId: string,
+    input: SubmitListingOfferBody,
+  ): Promise<ListingDto> {
+    if (!listing.equipmentMode) {
+      throw new AppError('This listing cannot take offers', 400, ErrorCode.VALIDATION_ERROR);
+    }
+    if (
+      listing.equipmentMode === 'both' &&
+      input.fulfillment !== 'rent' &&
+      input.fulfillment !== 'sale'
+    ) {
+      throw new AppError('Choose rent or sale for this offer', 400, ErrorCode.VALIDATION_ERROR);
+    }
+    const open = await prisma.equipmentHold.findFirst({
+      where: {
+        listingId: listing.id,
+        buyerId: viewerId,
+        status: { in: ['pending', 'selected', 'active'] },
+      },
+    });
+    if (open) {
+      throw new AppError(
+        'You already have an offer on this listing',
+        400,
+        ErrorCode.VALIDATION_ERROR,
+      );
+    }
+    const totalUnits = Math.max(listing.units ?? 1, 1);
+    const available = await availableUnitsFor(listing.id, totalUnits);
+    const units = Math.max(input.units ?? 1, 1);
+    if (available < 1 || units > available) {
+      throw new AppError(
+        available < 1
+          ? 'No units left on this listing'
+          : `Only ${available} units are still available`,
+        400,
+        ErrorCode.VALIDATION_ERROR,
+      );
+    }
+    const unitPrice = Number(input.price);
+    const totalPrice = Math.round(unitPrice * units * 100) / 100;
+    const offerId = crypto.randomUUID();
+    await prisma.equipmentHold.create({
+      data: {
+        listingId: listing.id,
+        offerId,
+        buyerId: viewerId,
+        kind: resolveDealKind(listing.equipmentMode, input.fulfillment),
+        units,
+        price: String(totalPrice),
+        status: 'pending',
+      },
+    });
+    notifyListingRfq(
+      listing.ownerId,
+      'New offer received',
+      `Someone submitted an offer on "${listing.title}".`,
+      listing,
+      `equipment-offer:${offerId}`,
+    );
+    return this.getById(listing.id, viewerId);
+  }
+
+  private async decideEquipmentOffer(
+    listing: NonNullable<Awaited<ReturnType<typeof listingRepository.findById>>>,
+    viewerId: string,
+    offerId: string,
+    action: 'select' | 'reject' | 'confirm' | 'decline' | 'withdraw',
+  ): Promise<ListingDto> {
+    const hold = await prisma.equipmentHold.findFirst({
+      where: { offerId, listingId: listing.id },
+    });
+    if (!hold) {
+      throw new AppError('Offer not found', 404, ErrorCode.NOT_FOUND);
+    }
+    const ownerAction = action === 'select' || action === 'reject';
+    if (ownerAction && listing.ownerId !== viewerId) {
+      throw new AppError('Only the listing owner can decide offers', 403, ErrorCode.FORBIDDEN);
+    }
+    if (!ownerAction && hold.buyerId !== viewerId) {
+      throw new AppError('Only the buyer can update this offer', 403, ErrorCode.FORBIDDEN);
+    }
+    if (action === 'select') {
+      if (hold.status !== 'pending') {
+        throw new AppError('This offer can no longer be accepted', 400, ErrorCode.VALIDATION_ERROR);
+      }
+      const available = await availableUnitsFor(listing.id, Math.max(listing.units ?? 1, 1));
+      if (hold.units > available) {
+        throw new AppError(
+          `Only ${available} units are still available`,
+          400,
+          ErrorCode.VALIDATION_ERROR,
+        );
+      }
+      await prisma.equipmentHold.update({ where: { id: hold.id }, data: { status: 'selected' } });
+      notifyListingRfq(
+        hold.buyerId,
+        'You were selected',
+        `Your offer on "${listing.title}" was selected. Confirm to proceed.`,
+        listing,
+        `equipment-select:${hold.id}`,
+      );
+    } else if (action === 'reject' && hold.status === 'pending') {
+      await prisma.equipmentHold.update({ where: { id: hold.id }, data: { status: 'rejected' } });
+    } else if (action === 'confirm' && hold.status === 'selected') {
+      await prisma.equipmentHold.update({ where: { id: hold.id }, data: { status: 'active' } });
+      notifyListingRfq(
+        listing.ownerId,
+        'Offer confirmed',
+        `An offer on "${listing.title}" was confirmed.`,
+        listing,
+        `equipment-confirm:${hold.id}`,
+      );
+    } else if (action === 'decline' && hold.status === 'selected') {
+      await prisma.equipmentHold.update({ where: { id: hold.id }, data: { status: 'declined' } });
+    } else if (action === 'withdraw' && hold.status === 'pending') {
+      await prisma.equipmentHold.update({ where: { id: hold.id }, data: { status: 'withdrawn' } });
+    } else {
+      throw new AppError('This offer can no longer be updated', 400, ErrorCode.VALIDATION_ERROR);
+    }
+    return this.getById(listing.id, viewerId);
+  }
+}
+
+async function requireSupplierEquipment(listingId: string, viewerId: string) {
+  const listing = await listingRepository.findById(listingId);
+  if (!listing || listing.status !== 'ACTIVE' || !isSupplierEquipment(listing)) {
+    throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
+  }
+  if (listing.ownerId !== viewerId) {
+    throw new AppError('Only the listing owner can manage units', 403, ErrorCode.FORBIDDEN);
+  }
+  return listing;
 }
 
 async function attachedAuctionIdsForViewer(viewerId: string): Promise<Set<string>> {

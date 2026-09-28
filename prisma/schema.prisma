@@ -60,6 +60,7 @@ model User {
   sentMessages    Message[]
   readReceipts    ConversationReadReceipt[]
   inboxItems      InAppNotification[]
+  equipmentHolds  EquipmentHold[]
 
   @@map("users")
 }
@@ -209,10 +210,46 @@ model Listing {
   owner          User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   media          ListingMedia[]
   conversations  Conversation[]
+  equipmentHolds EquipmentHold[]
 
   @@index([ownerId, category, createdAt])
   @@index([postedAs, category, createdAt])
   @@map("listings")
+}
+
+enum EquipmentDealKind {
+  rent
+  sale
+}
+
+enum EquipmentHoldStatus {
+  pending
+  selected
+  active
+  rejected
+  declined
+  withdrawn
+  returned
+}
+
+/** Units reserved on a supplier equipment listing. RFQ stays open; stock lives here. */
+model EquipmentHold {
+  id        String              @id @default(uuid())
+  listingId String
+  offerId   String              @unique
+  buyerId   String
+  kind      EquipmentDealKind
+  units     Int
+  price     String              @default("")
+  status    EquipmentHoldStatus @default(pending)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyer   User    @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+
+  @@index([listingId, status])
+  @@map("equipment_holds")
 }
 
 model ListingMedia {
