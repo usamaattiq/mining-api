@@ -61,6 +61,12 @@ export const listingController = {
     sendSuccess(res, 200, stock);
   },
 
+  async remove(req: AuthenticatedRequest, res: Response) {
+    const params = req.validatedParams as ListingIdParams;
+    await listingService.remove(params.id, req.user!.id);
+    sendSuccess(res, 200, { deleted: true });
+  },
+
   async getById(req: AuthenticatedRequest, res: Response) {
     const params = req.validatedParams as ListingIdParams;
     const listing = await listingService.getById(params.id, req.user!.id);

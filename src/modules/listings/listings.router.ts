@@ -100,6 +100,12 @@ listingsRouter.post(
   wrap((req, res) => listingController.returnRentedUnits(req, res)),
 );
 
+listingsRouter.delete(
+  '/:id',
+  validate(listingIdParamsSchema),
+  wrap((req, res) => listingController.remove(req, res)),
+);
+
 listingsRouter.get(
   '/:id',
   validate(listingIdParamsSchema),

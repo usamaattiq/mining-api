@@ -69,6 +69,17 @@ async function withOfferNames(listing: ListingDto): Promise<ListingDto> {
   };
 }
 
+const SUPPLIER_EQUIPMENT_LISTING_MS = 365 * 24 * 60 * 60 * 1000;
+
+function supplierEquipmentStillListed(listing: {
+  category: string;
+  postedAs: string;
+  createdAt: Date;
+}): boolean {
+  if (listing.category !== 'equipment' || listing.postedAs !== 'supplier') return true;
+  return Date.now() - listing.createdAt.getTime() < SUPPLIER_EQUIPMENT_LISTING_MS;
+}
+
 function epochToDate(value: number | null | undefined): Date | null {
   if (value === undefined || value === null) return null;
   return new Date(value);
@@ -203,11 +214,13 @@ class ListingService {
   }
 
   async listMine(ownerId: string, query: ListListingsQuery): Promise<ListingDto[]> {
-    const rows = await listingRepository.findMine({
-      ownerId,
-      postedAs: query.postedAs,
-      category: query.category,
-    });
+    const rows = (
+      await listingRepository.findMine({
+        ownerId,
+        postedAs: query.postedAs,
+        category: query.category,
+      })
+    ).filter(supplierEquipmentStillListed);
     return withEquipmentAvailability(
       await attachRfqStatuses(rows.map(toListingDto), rows, ownerId),
       ownerId,
@@ -215,11 +228,13 @@ class ListingService {
   }
 
   async listFeed(viewerId: string, query: ListFeedQuery): Promise<ListingDto[]> {
-    const rows = await listingRepository.findFeed({
-      postedAs: query.postedAs,
-      excludeOwnerId: viewerId,
-      category: query.category,
-    });
+    const rows = (
+      await listingRepository.findFeed({
+        postedAs: query.postedAs,
+        excludeOwnerId: viewerId,
+        category: query.category,
+      })
+    ).filter(supplierEquipmentStillListed);
     const listings = await withEquipmentAvailability(
       await attachRfqStatuses(rows.map(toListingDto), rows, viewerId),
       viewerId,
@@ -524,6 +539,17 @@ class ListingService {
         createdAt: hold.createdAt.getTime(),
       })),
     };
+  }
+
+  async remove(listingId: string, viewerId: string): Promise<void> {
+    const listing = await listingRepository.findById(listingId);
+    if (!listing || listing.status !== 'ACTIVE') {
+      throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
+    }
+    if (listing.ownerId !== viewerId) {
+      throw new AppError('Only the listing owner can delete it', 403, ErrorCode.FORBIDDEN);
+    }
+    await listingRepository.archive(listingId);
   }
 
   async updateEquipmentUnits(listingId: string, viewerId: string, units: number) {
