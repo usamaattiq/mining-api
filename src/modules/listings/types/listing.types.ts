@@ -73,6 +73,7 @@ export type EquipmentListingDto = {
   deliveryType: 'free' | 'perKm';
   deliveryPricePerKm: string;
   postedAs: 'buyer' | 'supplier';
+  requestMode: 'rfq' | 'auction';
   neededDate: number | null;
   owner: ListingOwnerDto;
   createdAt: number;

@@ -169,12 +169,18 @@ enum MarketplaceRole {
   supplier
 }
 
+enum ListingRequestMode {
+  rfq
+  auction
+}
+
 model Listing {
   id        String          @id @default(uuid())
   ownerId   String
   category  ListingCategory
   status    ListingStatus   @default(ACTIVE)
   postedAs  MarketplaceRole @default(supplier)
+  requestMode ListingRequestMode @default(rfq)
   title     String
   description String        @default("")
   location  String          @default("")

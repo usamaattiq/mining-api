@@ -163,7 +163,7 @@ export async function attachRfqStatuses(
   const rfqIds: string[] = [];
   for (const row of rows) {
     if (!row.rfqId) continue;
-    if (row.category === 'gold') goldIds.push(row.rfqId);
+    if (row.category === 'gold' || row.requestMode === 'auction') goldIds.push(row.rfqId);
     else rfqIds.push(row.rfqId);
   }
 
@@ -178,7 +178,9 @@ export async function attachRfqStatuses(
     const remoteId = byListingId.get(listing.id);
     if (!remoteId) return listing;
     const snapshot =
-      listing.category === 'gold' ? auctionSnapshots.get(remoteId) : rfqSnapshots.get(remoteId);
+      listing.category === 'gold' || listing.requestMode === 'auction'
+        ? auctionSnapshots.get(remoteId)
+        : rfqSnapshots.get(remoteId);
     return withRfq(listing, snapshot);
   });
 }
@@ -216,6 +218,13 @@ export async function createListingRfq(
   if (listing.category === 'equipment' && listing.postedAs === 'supplier') {
     return { listing };
   }
+  if (
+    listing.category === 'equipment' &&
+    listing.postedAs === 'buyer' &&
+    listing.requestMode === 'auction'
+  ) {
+    return createEquipmentAuction(listing, expiryHours);
+  }
   if (!rfqClient.isConfigured()) return { listing };
   if (
     listing.category !== 'equipment' &&
@@ -240,6 +249,31 @@ export async function createListingRfq(
     return { listing: updated, snapshot };
   } catch (error) {
     console.error('Failed to create RFQ for listing', { listingId: listing.id, error });
+    return { listing };
+  }
+}
+
+async function createEquipmentAuction(
+  listing: ListingWithMedia,
+  expiryHours: number,
+): Promise<{ listing: ListingWithMedia; snapshot?: RfqSnapshot }> {
+  if (!auctionClient.isConfigured()) return { listing };
+  const durationMinutes = Math.max(1, Math.round(expiryHours * 60));
+  try {
+    const snapshot = await auctionClient.createAuction({
+      ownerId: listing.ownerId,
+      listingId: listing.id,
+      startingAmount: 1,
+      durationMinutes,
+      activateImmediately: true,
+    });
+    const updated = await listingRepository.setRfqId(listing.id, snapshot.id);
+    return { listing: updated, snapshot: auctionSnapshotToRfq(snapshot) };
+  } catch (error) {
+    console.error('Failed to create auction for equipment listing', {
+      listingId: listing.id,
+      error,
+    });
     return { listing };
   }
 }

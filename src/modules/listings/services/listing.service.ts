@@ -115,6 +115,7 @@ function listingCreateData(ownerId: string, input: CreateListingBody): Prisma.Li
       deliveryType: input.deliveryType,
       deliveryPricePerKm: input.deliveryPricePerKm,
       postedAs: input.postedAs,
+      requestMode: input.postedAs === 'buyer' ? input.requestMode : 'rfq',
       serviceDate: epochToDate(input.neededDate),
       media,
     };
@@ -256,7 +257,9 @@ class ListingService {
       if (listing.category === 'equipment' && listing.postedAs === 'supplier') {
         return !offeredEquipment.has(listing.id);
       }
-      if (listing.category === 'gold') return !hideAuctionIds.has(listing.rfq.id);
+      if (listing.category === 'gold' || listing.requestMode === 'auction') {
+        return !hideAuctionIds.has(listing.rfq.id);
+      }
       return !hideRfqIds.has(listing.rfq.id);
     });
   }
@@ -371,7 +374,7 @@ class ListingService {
       }
       const unitPrice = Number(input.price);
       const totalPrice = units != null ? Math.round(unitPrice * units * 100) / 100 : unitPrice;
-      if (listing.category === 'gold') {
+      if (listing.category === 'gold' || listing.requestMode === 'auction') {
         const amount = Math.round(totalPrice);
         if (!Number.isFinite(amount) || amount < 1) {
           throw new AppError('Enter a bid of at least 1', 400, ErrorCode.VALIDATION_ERROR);
@@ -432,7 +435,7 @@ class ListingService {
 
     let responderId: string | undefined;
     try {
-      if (listing.category === 'gold') {
+      if (listing.category === 'gold' || listing.requestMode === 'auction') {
         const snapshot = auctionSnapshotToRfq(
           await auctionClient.getSnapshot(listing.rfqId, viewerId),
         );
