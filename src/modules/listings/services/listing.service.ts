@@ -630,9 +630,9 @@ class ListingService {
         throw new AppError('This offer can no longer be accepted', 400, ErrorCode.VALIDATION_ERROR);
       }
       const available = await availableUnitsFor(listing.id, Math.max(listing.units ?? 1, 1));
-      if (hold.units > available) {
+      if (available < 1 || hold.units > available) {
         throw new AppError(
-          `Only ${available} units are still available`,
+          available < 1 ? 'No units available' : 'Less units available',
           400,
           ErrorCode.VALIDATION_ERROR,
         );
