@@ -11,6 +11,7 @@ import {
   listFeedQuerySchema,
   listListingsQuerySchema,
   submitListingOfferBodySchema,
+  updateEquipmentUnitsSchema,
 } from './validation/listing.schema';
 
 export const listingsRouter = Router();
@@ -85,6 +86,12 @@ listingsRouter.get(
   '/:id/stock',
   validate(listingIdParamsSchema),
   wrap((req, res) => listingController.listEquipmentStock(req, res)),
+);
+
+listingsRouter.patch(
+  '/:id/stock',
+  validate(updateEquipmentUnitsSchema),
+  wrap((req, res) => listingController.updateEquipmentUnits(req, res)),
 );
 
 listingsRouter.post(

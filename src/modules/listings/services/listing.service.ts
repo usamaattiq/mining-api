@@ -526,6 +526,24 @@ class ListingService {
     };
   }
 
+  async updateEquipmentUnits(listingId: string, viewerId: string, units: number) {
+    const listing = await requireSupplierEquipment(listingId, viewerId);
+    const holds = await prisma.equipmentHold.findMany({
+      where: { listingId, status: { in: ['selected', 'active'] } },
+      select: { units: true },
+    });
+    const reserved = holds.reduce((sum, hold) => sum + hold.units, 0);
+    if (units < reserved) {
+      throw new AppError(
+        'Units cannot be less than those already rented or sold',
+        400,
+        ErrorCode.VALIDATION_ERROR,
+      );
+    }
+    await listingRepository.setUnits(listing.id, units);
+    return this.listEquipmentStock(listingId, viewerId);
+  }
+
   async returnRentedUnits(listingId: string, holdId: string, viewerId: string) {
     await requireSupplierEquipment(listingId, viewerId);
     const hold = await prisma.equipmentHold.findFirst({

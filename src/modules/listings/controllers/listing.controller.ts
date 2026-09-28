@@ -10,6 +10,7 @@ import type {
   ListFeedQuery,
   ListListingsQuery,
   SubmitListingOfferBody,
+  UpdateEquipmentUnitsBody,
 } from '../validation/listing.schema';
 
 export const listingController = {
@@ -44,6 +45,13 @@ export const listingController = {
   async listEquipmentStock(req: AuthenticatedRequest, res: Response) {
     const params = req.validatedParams as ListingIdParams;
     const stock = await listingService.listEquipmentStock(params.id, req.user!.id);
+    sendSuccess(res, 200, stock);
+  },
+
+  async updateEquipmentUnits(req: AuthenticatedRequest, res: Response) {
+    const params = req.validatedParams as ListingIdParams;
+    const body = req.validatedBody as UpdateEquipmentUnitsBody;
+    const stock = await listingService.updateEquipmentUnits(params.id, req.user!.id, body.units);
     sendSuccess(res, 200, stock);
   },
 

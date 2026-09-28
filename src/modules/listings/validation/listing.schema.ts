@@ -103,6 +103,15 @@ export const submitListingOfferBodySchema = z.object({
   }),
 });
 
+export const updateEquipmentUnitsSchema = z.object({
+  params: z.object({
+    id: z.string().uuid(),
+  }),
+  body: z.object({
+    units: z.number().int().min(1).max(9999),
+  }),
+});
+
 export const equipmentStockReturnParamsSchema = z.object({
   params: z.object({
     id: z.string().uuid(),
@@ -117,5 +126,6 @@ export const listingOfferActionParamsSchema = z.object({
   }),
 });
 
+export type UpdateEquipmentUnitsBody = z.infer<typeof updateEquipmentUnitsSchema>['body'];
 export type SubmitListingOfferBody = z.infer<typeof submitListingOfferBodySchema>['body'];
 export type ListingOfferActionParams = z.infer<typeof listingOfferActionParamsSchema>['params'];
