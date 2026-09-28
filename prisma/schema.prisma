@@ -217,10 +217,31 @@ model Listing {
   media          ListingMedia[]
   conversations  Conversation[]
   equipmentHolds EquipmentHold[]
+  serviceOfferChoices ServiceOfferChoice[]
 
   @@index([ownerId, category, createdAt])
   @@index([postedAs, category, createdAt])
   @@map("listings")
+}
+
+enum ServiceDeliveryMode {
+  onsite
+  online
+}
+
+/** How a sender chose to deliver a service listed as both onsite and online. */
+model ServiceOfferChoice {
+  id          String              @id @default(uuid())
+  listingId   String
+  responderId String
+  mode        ServiceDeliveryMode
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([listingId, responderId])
+  @@map("service_offer_choices")
 }
 
 enum EquipmentDealKind {

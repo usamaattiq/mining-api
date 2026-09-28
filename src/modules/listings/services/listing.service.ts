@@ -47,6 +47,29 @@ function mapRfqError(error: unknown, fallback: string): never {
   throw error;
 }
 
+async function withServiceDelivery(listing: ListingDto, viewerId: string): Promise<ListingDto> {
+  if (listing.category !== 'services' || !listing.rfq) return listing;
+  const choices = await prisma.serviceOfferChoice.findMany({
+    where: { listingId: listing.id },
+    select: { responderId: true, mode: true },
+  });
+  if (choices.length === 0) return listing;
+  const byResponder = new Map(choices.map((choice) => [choice.responderId, choice.mode]));
+  const offers = listing.rfq.offers?.map((offer) => {
+    const delivery = byResponder.get(offer.responderId);
+    return delivery ? { ...offer, delivery } : offer;
+  });
+  const mine = byResponder.get(viewerId);
+  return {
+    ...listing,
+    rfq: {
+      ...listing.rfq,
+      ...(offers ? { offers } : {}),
+      ...(mine ? { myOfferDelivery: mine } : {}),
+    },
+  };
+}
+
 async function withOfferNames(listing: ListingDto): Promise<ListingDto> {
   if (!('rfq' in listing) || !listing.rfq?.offers?.length) return listing;
   const offers = listing.rfq.offers;
@@ -329,8 +352,9 @@ class ListingService {
       throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
     }
     const named = await withOfferNames(dto);
-    const [withStock] = await withEquipmentAvailability([named], viewerId);
-    return withStock ?? named;
+    const withDelivery = await withServiceDelivery(named, viewerId);
+    const [withStock] = await withEquipmentAvailability([withDelivery], viewerId);
+    return withStock ?? withDelivery;
   }
 
   async submitOffer(
@@ -377,6 +401,18 @@ class ListingService {
       ) {
         throw new AppError('Choose rent or sale for this offer', 400, ErrorCode.VALIDATION_ERROR);
       }
+      if (
+        listing.category === 'services' &&
+        listing.serviceType === 'both' &&
+        input.delivery !== 'onsite' &&
+        input.delivery !== 'online'
+      ) {
+        throw new AppError(
+          'Choose onsite or online for this offer',
+          400,
+          ErrorCode.VALIDATION_ERROR,
+        );
+      }
       if (listing.category === 'equipment' && (input.units ?? 1) > available) {
         throw new AppError(
           `Only ${available} units are still available`,
@@ -400,6 +436,17 @@ class ListingService {
           capacityMode: 'partial',
           offeredQuantity: units ?? 1,
         });
+        if (
+          listing.category === 'services' &&
+          listing.serviceType === 'both' &&
+          (input.delivery === 'onsite' || input.delivery === 'online')
+        ) {
+          await prisma.serviceOfferChoice.upsert({
+            where: { listingId_responderId: { listingId: listing.id, responderId: viewerId } },
+            create: { listingId: listing.id, responderId: viewerId, mode: input.delivery },
+            update: { mode: input.delivery },
+          });
+        }
       }
     } catch (error) {
       if (error instanceof AppError) throw error;

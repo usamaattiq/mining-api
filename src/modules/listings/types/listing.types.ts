@@ -27,6 +27,7 @@ export type ListingRfqOfferDto = {
   quantity?: number;
   rank?: number;
   kind?: 'rent' | 'sale';
+  delivery?: 'onsite' | 'online';
 };
 
 export type ListingRfqDto = {
@@ -47,6 +48,7 @@ export type ListingRfqDto = {
   myOfferPrice?: string;
   myOfferQuantity?: number;
   myOfferKind?: 'rent' | 'sale';
+  myOfferDelivery?: 'onsite' | 'online';
   isLeading?: boolean;
   offers?: ListingRfqOfferDto[];
 };
