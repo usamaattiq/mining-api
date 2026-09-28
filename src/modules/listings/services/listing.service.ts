@@ -155,11 +155,17 @@ function listingCreateData(ownerId: string, input: CreateListingBody): Prisma.Li
 
 class ListingService {
   async create(ownerId: string, input: CreateListingBody): Promise<ListingDto> {
-    if (input.category === 'gold') {
-      if (!(await auctionClient.isReachable())) {
-        throw new AppError('Auction service is down', 503, ErrorCode.INTERNAL_ERROR);
-      }
-    } else if (!(await rfqClient.isReachable())) {
+    const usesAuction =
+      input.category === 'gold' ||
+      (input.category === 'equipment' &&
+        input.postedAs === 'buyer' &&
+        input.requestMode === 'auction');
+    const supplierEquipment = input.category === 'equipment' && input.postedAs === 'supplier';
+    const usesRfq = !usesAuction && !supplierEquipment;
+    if (usesAuction && !(await auctionClient.isReachable())) {
+      throw new AppError('Auction service is down', 503, ErrorCode.INTERNAL_ERROR);
+    }
+    if (usesRfq && !(await rfqClient.isReachable())) {
       throw new AppError('RFQ Management System Down', 503, ErrorCode.INTERNAL_ERROR);
     }
 
@@ -201,7 +207,13 @@ class ListingService {
             endsAt: input.auctionEndDate ?? null,
             startingAmount: Number(input.price) || 1,
           }
-        : undefined;
+        : input.category === 'equipment' && input.requestMode === 'auction'
+          ? {
+              startsAt: input.auctionStartDate ?? null,
+              endsAt: input.auctionEndDate ?? null,
+              startingAmount: 1,
+            }
+          : undefined;
     const { listing: withRfqRow, snapshot } = await createListingRfq(
       listing,
       expiryHours,

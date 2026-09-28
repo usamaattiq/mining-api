@@ -223,7 +223,7 @@ export async function createListingRfq(
     listing.postedAs === 'buyer' &&
     listing.requestMode === 'auction'
   ) {
-    return createEquipmentAuction(listing, expiryHours);
+    return createEquipmentAuction(listing, schedule);
   }
   if (!rfqClient.isConfigured()) return { listing };
   if (
@@ -255,17 +255,27 @@ export async function createListingRfq(
 
 async function createEquipmentAuction(
   listing: ListingWithMedia,
-  expiryHours: number,
+  schedule?: { startsAt: number | null; endsAt: number | null; startingAmount: number },
 ): Promise<{ listing: ListingWithMedia; snapshot?: RfqSnapshot }> {
   if (!auctionClient.isConfigured()) return { listing };
-  const durationMinutes = Math.max(1, Math.round(expiryHours * 60));
+  const now = Date.now();
+  const startsAt = schedule?.startsAt ?? null;
+  const endsAt = schedule?.endsAt ?? null;
+  const durationMinutes =
+    startsAt != null && endsAt != null
+      ? Math.max(1, Math.round((endsAt - startsAt) / 60_000))
+      : 24 * 60;
+  const activateImmediately = startsAt == null || startsAt <= now;
   try {
     const snapshot = await auctionClient.createAuction({
       ownerId: listing.ownerId,
       listingId: listing.id,
       startingAmount: 1,
       durationMinutes,
-      activateImmediately: true,
+      ...(startsAt != null && !activateImmediately
+        ? { startsAt: new Date(startsAt).toISOString() }
+        : {}),
+      activateImmediately,
     });
     const updated = await listingRepository.setRfqId(listing.id, snapshot.id);
     return { listing: updated, snapshot: auctionSnapshotToRfq(snapshot) };

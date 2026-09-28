@@ -29,6 +29,8 @@ const equipmentBodySchema = z.object({
   deliveryPricePerKm: z.string().trim().max(40).default(''),
   postedAs: z.enum(['buyer', 'supplier']).default('supplier'),
   requestMode: z.enum(['rfq', 'auction']).default('rfq'),
+  auctionStartDate: z.number().int().nullable().optional(),
+  auctionEndDate: z.number().int().nullable().optional(),
   neededDate: z.number().int().nullable().optional(),
   expiryHours: z.number().int().min(1).max(8760).optional(),
 });
