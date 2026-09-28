@@ -598,6 +598,7 @@ class ListingService {
         units: hold.units,
         status: hold.status,
         buyerName: hold.buyer.fullName,
+        price: hold.price,
         createdAt: hold.createdAt.getTime(),
       })),
     };
