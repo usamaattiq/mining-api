@@ -111,7 +111,7 @@ export async function withEquipmentAvailability(
       statusVariant: 'accent',
       expiresAt: null,
       offersCount: visible.length,
-      canSubmitOffer: available > 0 && !mine,
+      canSubmitOffer: available > 0,
       canDecideOffers: true,
       canConfirmOffer: mine?.status === 'selected',
       canDeclineOffer: mine?.status === 'selected',

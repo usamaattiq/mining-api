@@ -81,9 +81,19 @@ async function withDealContactPhones(
     if (!rfq) continue;
     if (listing.ownerId === viewerId) {
       for (const offer of rfq.offers ?? []) {
-        if (offer.status === 'confirmed' && offer.responderId) userIds.add(offer.responderId);
+        if (offer.status === 'confirmed' || offer.status === 'selected') {
+          if (offer.responderId) userIds.add(offer.responderId);
+        }
       }
-    } else if (rfq.myOfferStatus === 'confirmed') {
+    } else if (
+      rfq.myOfferStatus === 'confirmed' ||
+      rfq.myOfferStatus === 'selected' ||
+      (rfq.offers ?? []).some(
+        (offer) =>
+          offer.responderId === viewerId &&
+          (offer.status === 'confirmed' || offer.status === 'selected'),
+      )
+    ) {
       userIds.add(listing.ownerId);
     }
   }
@@ -102,13 +112,23 @@ async function withDealContactPhones(
         rfq: {
           ...rfq,
           offers: rfq.offers?.map((offer) => {
-            const phone = offer.status === 'confirmed' ? phones.get(offer.responderId) : undefined;
+            const phone =
+              offer.status === 'confirmed' || offer.status === 'selected'
+                ? phones.get(offer.responderId)
+                : undefined;
             return phone ? { ...offer, responderPhone: phone } : offer;
           }),
         },
       };
     }
-    if (rfq.myOfferStatus !== 'confirmed') return listing;
+    const dealOpen = (rfq.offers ?? []).some(
+      (offer) =>
+        offer.responderId === viewerId &&
+        (offer.status === 'confirmed' || offer.status === 'selected'),
+    );
+    if (rfq.myOfferStatus !== 'confirmed' && rfq.myOfferStatus !== 'selected' && !dealOpen) {
+      return listing;
+    }
     const ownerPhone = phones.get(listing.ownerId);
     return ownerPhone ? { ...listing, rfq: { ...rfq, ownerPhone } } : listing;
   });
@@ -744,20 +764,6 @@ class ListingService {
       input.fulfillment !== 'sale'
     ) {
       throw new AppError('Choose rent or sale for this offer', 400, ErrorCode.VALIDATION_ERROR);
-    }
-    const open = await prisma.equipmentHold.findFirst({
-      where: {
-        listingId: listing.id,
-        buyerId: viewerId,
-        status: { in: ['pending', 'selected', 'active'] },
-      },
-    });
-    if (open) {
-      throw new AppError(
-        'You already have an offer on this listing',
-        400,
-        ErrorCode.VALIDATION_ERROR,
-      );
     }
     const totalUnits = Math.max(listing.units ?? 1, 1);
     const available = await availableUnitsFor(listing.id, totalUnits);
