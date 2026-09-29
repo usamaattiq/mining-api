@@ -770,6 +770,22 @@ class ListingService {
         ErrorCode.VALIDATION_ERROR,
       );
     }
+    const kind = resolveDealKind(listing.equipmentMode, input.fulfillment);
+    const openSameKind = await prisma.equipmentHold.findFirst({
+      where: {
+        listingId: listing.id,
+        buyerId: viewerId,
+        kind,
+        status: { in: ['pending', 'selected'] },
+      },
+    });
+    if (openSameKind) {
+      throw new AppError(
+        'You already have an open offer of this type',
+        400,
+        ErrorCode.VALIDATION_ERROR,
+      );
+    }
     const unitPrice = Number(input.price);
     const totalPrice = Math.round(unitPrice * units * 100) / 100;
     const offerId = crypto.randomUUID();
@@ -778,7 +794,7 @@ class ListingService {
         listingId: listing.id,
         offerId,
         buyerId: viewerId,
-        kind: resolveDealKind(listing.equipmentMode, input.fulfillment),
+        kind,
         units,
         price: String(totalPrice),
         status: 'pending',
