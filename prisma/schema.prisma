@@ -182,6 +182,8 @@ model Listing {
   postedAs  MarketplaceRole @default(supplier)
   requestMode ListingRequestMode @default(rfq)
   title     String
+  /** RFQ-26-0001, AUC-26-0001, or SEQ-26-0001. */
+  reference String          @unique
   description String        @default("")
   location  String          @default("")
 
@@ -222,6 +224,15 @@ model Listing {
   @@index([ownerId, category, createdAt])
   @@index([postedAs, category, createdAt])
   @@map("listings")
+}
+
+model ListingReferenceCounter {
+  prefix String
+  year   Int
+  next   Int    @default(1)
+
+  @@id([prefix, year])
+  @@map("listing_reference_counters")
 }
 
 enum ServiceDeliveryMode {

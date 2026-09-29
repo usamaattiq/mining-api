@@ -220,6 +220,31 @@ function listingCreateData(ownerId: string, input: CreateListingBody): Prisma.Li
   };
 }
 
+function listingReferencePrefix(input: CreateListingBody): 'SEQ' | 'AUC' | 'RFQ' {
+  if (input.category === 'equipment' && input.postedAs === 'supplier') return 'SEQ';
+  if (input.category === 'gold') return 'AUC';
+  if (input.category === 'equipment' && input.requestMode === 'auction') return 'AUC';
+  return 'RFQ';
+}
+
+async function allocateListingReference(
+  tx: Prisma.TransactionClient,
+  prefix: 'SEQ' | 'AUC' | 'RFQ',
+): Promise<string> {
+  const year = new Date().getUTCFullYear();
+  await tx.listingReferenceCounter.upsert({
+    where: { prefix_year: { prefix, year } },
+    create: { prefix, year, next: 1 },
+    update: {},
+  });
+  const row = await tx.listingReferenceCounter.update({
+    where: { prefix_year: { prefix, year } },
+    data: { next: { increment: 1 } },
+  });
+  const sequence = row.next - 1;
+  return `${prefix}-${String(year).slice(-2)}-${String(sequence).padStart(4, '0')}`;
+}
+
 class ListingService {
   async create(ownerId: string, input: CreateListingBody): Promise<ListingDto> {
     const usesAuction =
@@ -237,7 +262,11 @@ class ListingService {
     }
 
     const listing = await runInTransaction(async (tx) => {
-      const created = await listingRepository.create(listingCreateData(ownerId, input), tx);
+      const reference = await allocateListingReference(tx, listingReferencePrefix(input));
+      const created = await listingRepository.create(
+        { ...listingCreateData(ownerId, input), reference },
+        tx,
+      );
       await inboxRepository.create(
         {
           userId: ownerId,

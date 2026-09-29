@@ -64,6 +64,7 @@ export type EquipmentListingDto = {
   mode: 'rent' | 'sell' | 'both';
   equipmentTypeLabel: string;
   title: string;
+  reference: string;
   description: string;
   hourlyRental: string;
   monthlyRental: string;
@@ -93,6 +94,7 @@ export type ServiceListingDto = {
   serviceType: 'onsite' | 'online' | 'both';
   serviceCategoryLabel: string;
   title: string;
+  reference: string;
   description: string;
   yearsOfExperience: string;
   price: string;
@@ -110,6 +112,7 @@ export type GoldListingDto = {
   ownerId: string;
   category: 'gold';
   title: string;
+  reference: string;
   description: string;
   weight: string;
   purityLabel: string;
