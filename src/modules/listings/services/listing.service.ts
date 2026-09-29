@@ -70,6 +70,50 @@ async function withServiceDelivery(listing: ListingDto, viewerId: string): Promi
   };
 }
 
+/** Phones are attached only for a confirmed deal, and only to the two parties. */
+async function withDealContactPhones(
+  listings: ListingDto[],
+  viewerId: string,
+): Promise<ListingDto[]> {
+  const userIds = new Set<string>();
+  for (const listing of listings) {
+    const rfq = 'rfq' in listing ? listing.rfq : undefined;
+    if (!rfq) continue;
+    if (listing.ownerId === viewerId) {
+      for (const offer of rfq.offers ?? []) {
+        if (offer.status === 'confirmed' && offer.responderId) userIds.add(offer.responderId);
+      }
+    } else if (rfq.myOfferStatus === 'confirmed') {
+      userIds.add(listing.ownerId);
+    }
+  }
+  if (userIds.size === 0) return listings;
+  const users = await prisma.user.findMany({
+    where: { id: { in: [...userIds] }, deletedAt: null },
+    select: { id: true, phoneE164: true },
+  });
+  const phones = new Map(users.map((user) => [user.id, user.phoneE164]));
+  return listings.map((listing) => {
+    const rfq = 'rfq' in listing ? listing.rfq : undefined;
+    if (!rfq) return listing;
+    if (listing.ownerId === viewerId) {
+      return {
+        ...listing,
+        rfq: {
+          ...rfq,
+          offers: rfq.offers?.map((offer) => {
+            const phone = offer.status === 'confirmed' ? phones.get(offer.responderId) : undefined;
+            return phone ? { ...offer, responderPhone: phone } : offer;
+          }),
+        },
+      };
+    }
+    if (rfq.myOfferStatus !== 'confirmed') return listing;
+    const ownerPhone = phones.get(listing.ownerId);
+    return ownerPhone ? { ...listing, rfq: { ...rfq, ownerPhone } } : listing;
+  });
+}
+
 async function withOfferNames(listing: ListingDto): Promise<ListingDto> {
   if (!('rfq' in listing) || !listing.rfq?.offers?.length) return listing;
   const offers = listing.rfq.offers;
@@ -257,8 +301,11 @@ class ListingService {
         category: query.category,
       })
     ).filter(supplierEquipmentStillListed);
-    return withEquipmentAvailability(
-      await attachRfqStatuses(rows.map(toListingDto), rows, ownerId),
+    return withDealContactPhones(
+      await withEquipmentAvailability(
+        await attachRfqStatuses(rows.map(toListingDto), rows, ownerId),
+        ownerId,
+      ),
       ownerId,
     );
   }
@@ -337,12 +384,13 @@ class ListingService {
       await attachRfqStatuses(rows.map(toListingDto), rows, viewerId),
       viewerId,
     );
-    return listings.filter((listing) => {
+    const visible = listings.filter((listing) => {
       if (listing.category === 'equipment' && listing.postedAs === 'supplier') {
         return Boolean(listing.rfq?.myOfferId);
       }
       return true;
     });
+    return withDealContactPhones(visible, viewerId);
   }
 
   async getById(id: string, viewerId: string): Promise<ListingDto> {
@@ -357,7 +405,8 @@ class ListingService {
     const named = await withOfferNames(dto);
     const withDelivery = await withServiceDelivery(named, viewerId);
     const [withStock] = await withEquipmentAvailability([withDelivery], viewerId);
-    return withStock ?? withDelivery;
+    const [withPhones] = await withDealContactPhones([withStock ?? withDelivery], viewerId);
+    return withPhones ?? withStock ?? withDelivery;
   }
 
   async submitOffer(
@@ -580,7 +629,7 @@ class ListingService {
     const listing = await requireSupplierEquipment(listingId, viewerId);
     const holds = await prisma.equipmentHold.findMany({
       where: { listingId, status: { in: ['selected', 'active', 'returned'] } },
-      include: { buyer: { select: { fullName: true } } },
+      include: { buyer: { select: { id: true, fullName: true } } },
       orderBy: { createdAt: 'desc' },
     });
     const active = holds.filter((hold) => hold.status === 'active' || hold.status === 'selected');
@@ -600,6 +649,7 @@ class ListingService {
         kind: hold.kind,
         units: hold.units,
         status: hold.status,
+        buyerId: hold.buyer.id,
         buyerName: hold.buyer.fullName,
         price: hold.price,
         createdAt: hold.createdAt.getTime(),

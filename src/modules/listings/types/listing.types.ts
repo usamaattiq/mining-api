@@ -28,6 +28,8 @@ export type ListingRfqOfferDto = {
   rank?: number;
   kind?: 'rent' | 'sale';
   delivery?: 'onsite' | 'online';
+  /** Set for the listing owner once this offer is confirmed. */
+  responderPhone?: string;
 };
 
 export type ListingRfqDto = {
@@ -49,6 +51,8 @@ export type ListingRfqDto = {
   myOfferQuantity?: number;
   myOfferKind?: 'rent' | 'sale';
   myOfferDelivery?: 'onsite' | 'online';
+  /** Listing owner's phone, shown to the confirmed sender. */
+  ownerPhone?: string;
   isLeading?: boolean;
   offers?: ListingRfqOfferDto[];
 };
