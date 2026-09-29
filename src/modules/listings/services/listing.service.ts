@@ -292,7 +292,10 @@ class ListingService {
       if (listing.category === 'equipment' && listing.postedAs === 'supplier') {
         return !offeredEquipment.has(listing.id);
       }
-      if (listing.category === 'gold' || listing.requestMode === 'auction') {
+      if (
+        listing.category === 'gold' ||
+        (listing.category === 'equipment' && listing.requestMode === 'auction')
+      ) {
         return !hideAuctionIds.has(listing.rfq.id);
       }
       return !hideRfqIds.has(listing.rfq.id);

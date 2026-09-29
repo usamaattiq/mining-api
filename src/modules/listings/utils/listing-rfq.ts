@@ -178,7 +178,8 @@ export async function attachRfqStatuses(
     const remoteId = byListingId.get(listing.id);
     if (!remoteId) return listing;
     const snapshot =
-      listing.category === 'gold' || listing.requestMode === 'auction'
+      listing.category === 'gold' ||
+      (listing.category === 'equipment' && listing.requestMode === 'auction')
         ? auctionSnapshots.get(remoteId)
         : rfqSnapshots.get(remoteId);
     return withRfq(listing, snapshot);
