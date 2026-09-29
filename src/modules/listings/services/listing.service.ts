@@ -81,17 +81,12 @@ async function withDealContactPhones(
     if (!rfq) continue;
     if (listing.ownerId === viewerId) {
       for (const offer of rfq.offers ?? []) {
-        if (offer.status === 'confirmed' || offer.status === 'selected') {
-          if (offer.responderId) userIds.add(offer.responderId);
-        }
+        if (offer.status === 'confirmed' && offer.responderId) userIds.add(offer.responderId);
       }
     } else if (
       rfq.myOfferStatus === 'confirmed' ||
-      rfq.myOfferStatus === 'selected' ||
       (rfq.offers ?? []).some(
-        (offer) =>
-          offer.responderId === viewerId &&
-          (offer.status === 'confirmed' || offer.status === 'selected'),
+        (offer) => offer.responderId === viewerId && offer.status === 'confirmed',
       )
     ) {
       userIds.add(listing.ownerId);
@@ -112,21 +107,16 @@ async function withDealContactPhones(
         rfq: {
           ...rfq,
           offers: rfq.offers?.map((offer) => {
-            const phone =
-              offer.status === 'confirmed' || offer.status === 'selected'
-                ? phones.get(offer.responderId)
-                : undefined;
+            const phone = offer.status === 'confirmed' ? phones.get(offer.responderId) : undefined;
             return phone ? { ...offer, responderPhone: phone } : offer;
           }),
         },
       };
     }
     const dealOpen = (rfq.offers ?? []).some(
-      (offer) =>
-        offer.responderId === viewerId &&
-        (offer.status === 'confirmed' || offer.status === 'selected'),
+      (offer) => offer.responderId === viewerId && offer.status === 'confirmed',
     );
-    if (rfq.myOfferStatus !== 'confirmed' && rfq.myOfferStatus !== 'selected' && !dealOpen) {
+    if (rfq.myOfferStatus !== 'confirmed' && !dealOpen) {
       return listing;
     }
     const ownerPhone = phones.get(listing.ownerId);
