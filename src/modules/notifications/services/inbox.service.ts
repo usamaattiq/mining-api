@@ -1,10 +1,14 @@
-import type { InAppNotification } from '@prisma/client';
+import type { InAppNotification, ListingCategory } from '@prisma/client';
 import { AppError } from '../../../common/errors/app-error';
 import { ErrorCode } from '../../../common/errors/error-codes';
+import { prisma } from '../../../common/database/prisma';
 import { inboxRepository } from '../repositories/inbox.repository';
 import type { InAppNotificationDto } from '../types/inbox.types';
 
-function toDto(row: InAppNotification): InAppNotificationDto {
+function toDto(
+  row: InAppNotification,
+  listingCategory: ListingCategory | null,
+): InAppNotificationDto {
   return {
     id: row.id,
     titleKey: row.titleKey,
@@ -14,6 +18,7 @@ function toDto(row: InAppNotification): InAppNotificationDto {
     icon: row.icon,
     target: row.target,
     listingId: row.listingId,
+    listingCategory,
     conversationId: row.conversationId,
   };
 }
@@ -21,7 +26,18 @@ function toDto(row: InAppNotification): InAppNotificationDto {
 class InboxService {
   async list(userId: string): Promise<InAppNotificationDto[]> {
     const rows = await inboxRepository.listForUser(userId);
-    return rows.map(toDto);
+    const listingIds = rows.map((row) => row.listingId).filter((id): id is string => Boolean(id));
+    const listings =
+      listingIds.length === 0
+        ? []
+        : await prisma.listing.findMany({
+            where: { id: { in: listingIds } },
+            select: { id: true, category: true },
+          });
+    const categoryById = new Map(listings.map((listing) => [listing.id, listing.category]));
+    return rows.map((row) =>
+      toDto(row, row.listingId ? (categoryById.get(row.listingId) ?? null) : null),
+    );
   }
 
   async markRead(userId: string, id: string): Promise<void> {

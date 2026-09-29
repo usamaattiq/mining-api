@@ -7,5 +7,6 @@ export type InAppNotificationDto = {
   icon: string;
   target: 'Requests' | 'Messages' | 'HomeTab';
   listingId: string | null;
+  listingCategory: 'equipment' | 'services' | 'gold' | null;
   conversationId: string | null;
 };
