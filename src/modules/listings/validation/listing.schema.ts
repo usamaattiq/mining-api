@@ -43,6 +43,8 @@ const serviceBodySchema = z.object({
   description: z.string().trim().max(5000).default(''),
   yearsOfExperience: z.string().trim().max(20).default(''),
   price: z.string().trim().max(40).default(''),
+  onsitePrice: z.string().trim().max(40).default(''),
+  onlinePrice: z.string().trim().max(40).default(''),
   serviceDate: z.number().int().nullable().optional(),
   expiryHours: z.number().int().min(1).max(8760).optional(),
   location: z.string().trim().max(500).default(''),

@@ -202,6 +202,10 @@ function listingCreateData(
   }
 
   if (input.category === 'services') {
+    const onsitePrice =
+      input.serviceType === 'online' ? '' : input.onsitePrice || input.price || '';
+    const onlinePrice =
+      input.serviceType === 'onsite' ? '' : input.onlinePrice || input.price || '';
     return {
       owner: { connect: { id: ownerId } },
       category: 'services',
@@ -211,7 +215,9 @@ function listingCreateData(
       serviceType: input.serviceType,
       serviceCategoryLabel: input.serviceCategoryLabel,
       yearsOfExperience: input.yearsOfExperience,
-      price: input.price,
+      price: onsitePrice || onlinePrice,
+      onsitePrice,
+      onlinePrice,
       serviceDate: epochToDate(input.serviceDate),
       postedAs: input.postedAs,
       media,

@@ -98,6 +98,8 @@ export type ServiceListingDto = {
   description: string;
   yearsOfExperience: string;
   price: string;
+  onsitePrice: string;
+  onlinePrice: string;
   serviceDate: number | null;
   location: string;
   media: ListingMediaDto[];

@@ -203,6 +203,8 @@ model Listing {
   serviceCategoryLabel   String?
   yearsOfExperience      String?
   price                  String?
+  onsitePrice            String?
+  onlinePrice            String?
   serviceDate            DateTime?
 
   weight         String?
