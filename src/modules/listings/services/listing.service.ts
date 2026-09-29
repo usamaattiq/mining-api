@@ -172,7 +172,10 @@ function epochToDate(value: number | null | undefined): Date | null {
   return new Date(value);
 }
 
-function listingCreateData(ownerId: string, input: CreateListingBody): Prisma.ListingCreateInput {
+function listingCreateData(
+  ownerId: string,
+  input: CreateListingBody,
+): Omit<Prisma.ListingCreateInput, 'reference'> {
   const media = {
     create: input.media.map((item, index) => ({
       uri: item.uri,
