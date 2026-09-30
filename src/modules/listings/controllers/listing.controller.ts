@@ -11,6 +11,7 @@ import type {
   ListListingsQuery,
   SubmitListingOfferBody,
   UpdateEquipmentUnitsBody,
+  UpdateListingOfferBody,
 } from '../validation/listing.schema';
 
 export const listingController = {
@@ -121,6 +122,13 @@ export const listingController = {
       params.offerId,
       'decline',
     );
+    sendSuccess(res, 200, listing);
+  },
+
+  async updateOffer(req: AuthenticatedRequest, res: Response) {
+    const params = req.validatedParams as ListingOfferActionParams;
+    const body = req.validatedBody as UpdateListingOfferBody;
+    const listing = await listingService.updateOffer(params.id, req.user!.id, params.offerId, body);
     sendSuccess(res, 200, listing);
   },
 

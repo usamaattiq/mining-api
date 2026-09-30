@@ -12,6 +12,7 @@ import {
   listListingsQuerySchema,
   submitListingOfferBodySchema,
   updateEquipmentUnitsSchema,
+  updateListingOfferSchema,
 } from './validation/listing.schema';
 
 export const listingsRouter = Router();
@@ -68,6 +69,12 @@ listingsRouter.post(
   '/:id/offers/:offerId/decline',
   validate(listingOfferActionParamsSchema),
   wrap((req, res) => listingController.declineOffer(req, res)),
+);
+
+listingsRouter.patch(
+  '/:id/offers/:offerId',
+  validate(updateListingOfferSchema),
+  wrap((req, res) => listingController.updateOffer(req, res)),
 );
 
 listingsRouter.post(
