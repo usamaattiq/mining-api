@@ -20,6 +20,11 @@ const envSchema = z.object({
   RFQ_API_KEY: z.string().optional(),
   RFQ_API_TIMEOUT: z.coerce.number().default(30000),
 
+  // Auction HTTP client (gold listings)
+  AUCTION_BASE_URL: z.string().optional(),
+  AUCTION_API_KEY: z.string().optional(),
+  AUCTION_API_TIMEOUT: z.coerce.number().default(30000),
+
   // RFQ Pub/Sub consumer (RMS publishes facts to rfq-events; mining maps → Ping)
   PUBSUB_ENABLED: z
     .string()

@@ -1,5 +1,6 @@
 import { AppError } from '../../../common/errors/app-error';
 import { ErrorCode } from '../../../common/errors/error-codes';
+import { prisma } from '../../../common/database/prisma';
 import { runInTransaction } from '../../../common/database/transaction';
 import { listingRepository } from '../../listings/repositories/listing.repository';
 import { inboxRepository } from '../../notifications/repositories/inbox.repository';
@@ -9,6 +10,8 @@ import { messageRepository } from '../repositories/message.repository';
 import type { ConversationDto } from '../types/message.types';
 import { toConversationDto } from '../utils/conversation.mapper';
 import { emitChatMessage, emitChatRead } from '../../../realtime/chat.emitter';
+import { auctionClient } from '../../../integrations/auction/auction.client';
+import { auctionSnapshotToRfq } from '../../listings/utils/listing-rfq';
 import { rfqClient } from '../../../integrations/rfq/rfq.client';
 
 function assertParticipant(buyerId: string, sellerId: string, userId: string): void {
@@ -46,22 +49,42 @@ class MessageService {
       throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
     }
     if (listing.ownerId === userId) {
-      if (!buyerId || !listing.rfqId) {
+      if (!buyerId) {
         throw new AppError('Cannot message your own listing', 400, ErrorCode.VALIDATION_ERROR);
       }
-      const snapshot = await rfqClient.getSnapshot(listing.rfqId, userId);
-      const confirmed = (snapshot.offers ?? []).some((offer) => {
-        const responderId = String(offer.responder_id ?? offer.responderId ?? '');
-        return (
-          responderId === buyerId && (offer.status === 'selected' || offer.status === 'confirmed')
-        );
-      });
-      if (!confirmed) {
-        throw new AppError(
-          'Messaging opens after the offer is confirmed',
-          403,
-          ErrorCode.FORBIDDEN,
-        );
+      const supplierEquipment = listing.category === 'equipment' && listing.postedAs === 'supplier';
+      if (supplierEquipment) {
+        const hold = await prisma.equipmentHold.findFirst({
+          where: { listingId, buyerId, status: { in: ['selected', 'active'] } },
+        });
+        if (!hold) {
+          throw new AppError(
+            'Messaging opens after the offer is confirmed',
+            403,
+            ErrorCode.FORBIDDEN,
+          );
+        }
+      } else {
+        if (!listing.rfqId) {
+          throw new AppError('Cannot message your own listing', 400, ErrorCode.VALIDATION_ERROR);
+        }
+        const snapshot =
+          listing.category === 'gold'
+            ? auctionSnapshotToRfq(await auctionClient.getSnapshot(listing.rfqId, userId))
+            : await rfqClient.getSnapshot(listing.rfqId, userId);
+        const canMessage = (snapshot.offers ?? []).some((offer) => {
+          const responderId = String(offer.responder_id ?? offer.responderId ?? '');
+          if (responderId !== buyerId) return false;
+          if (listing.category === 'gold') return true;
+          return offer.status === 'selected' || offer.status === 'confirmed';
+        });
+        if (!canMessage) {
+          throw new AppError(
+            'Messaging opens after the offer is confirmed',
+            403,
+            ErrorCode.FORBIDDEN,
+          );
+        }
       }
       const existing = await conversationRepository.findByListingAndBuyer(listingId, buyerId);
       if (existing) {

@@ -10,7 +10,7 @@ class UserSessionRepository {
     tx: Tx | typeof prisma = prisma,
   ): Promise<boolean> {
     const session = await tx.userSession.findFirst({
-      where: { userId, deviceId, revokedAt: null },
+      where: { userId, deviceId },
     });
     return Boolean(session);
   }

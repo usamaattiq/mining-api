@@ -10,6 +10,7 @@ import type {
   ListFeedQuery,
   ListListingsQuery,
   SubmitListingOfferBody,
+  UpdateEquipmentUnitsBody,
 } from '../validation/listing.schema';
 
 export const listingController = {
@@ -39,6 +40,31 @@ export const listingController = {
   async listMyOffers(req: AuthenticatedRequest, res: Response) {
     const listings = await listingService.listMyOffers(req.user!.id);
     sendSuccess(res, 200, listings);
+  },
+
+  async listEquipmentStock(req: AuthenticatedRequest, res: Response) {
+    const params = req.validatedParams as ListingIdParams;
+    const stock = await listingService.listEquipmentStock(params.id, req.user!.id);
+    sendSuccess(res, 200, stock);
+  },
+
+  async updateEquipmentUnits(req: AuthenticatedRequest, res: Response) {
+    const params = req.validatedParams as ListingIdParams;
+    const body = req.validatedBody as UpdateEquipmentUnitsBody;
+    const stock = await listingService.updateEquipmentUnits(params.id, req.user!.id, body.units);
+    sendSuccess(res, 200, stock);
+  },
+
+  async returnRentedUnits(req: AuthenticatedRequest, res: Response) {
+    const params = req.validatedParams as ListingIdParams & { holdId: string };
+    const stock = await listingService.returnRentedUnits(params.id, params.holdId, req.user!.id);
+    sendSuccess(res, 200, stock);
+  },
+
+  async remove(req: AuthenticatedRequest, res: Response) {
+    const params = req.validatedParams as ListingIdParams;
+    await listingService.remove(params.id, req.user!.id);
+    sendSuccess(res, 200, { deleted: true });
   },
 
   async getById(req: AuthenticatedRequest, res: Response) {

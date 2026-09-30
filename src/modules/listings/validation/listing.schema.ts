@@ -12,13 +12,14 @@ const mediaSchema = z.array(mediaItemSchema).max(20).default([]);
 
 const equipmentBodySchema = z.object({
   category: z.literal('equipment'),
-  mode: z.enum(['rent', 'sell']),
+  mode: z.enum(['rent', 'sell', 'both']),
   equipmentTypeLabel: z.string().trim().min(1).max(150),
   title: z.string().trim().min(1).max(200),
   description: z.string().trim().max(5000).default(''),
   hourlyRental: z.string().trim().max(40).default(''),
   monthlyRental: z.string().trim().max(40).default(''),
   weeklyRental: z.string().trim().max(40).default(''),
+  yearlyRental: z.string().trim().max(40).default(''),
   salePrice: z.string().trim().max(40).default(''),
   units: z.number().int().min(1).max(9999).default(1),
   location: z.string().trim().max(500).default(''),
@@ -27,6 +28,9 @@ const equipmentBodySchema = z.object({
   deliveryType: z.enum(['free', 'perKm']).default('free'),
   deliveryPricePerKm: z.string().trim().max(40).default(''),
   postedAs: z.enum(['buyer', 'supplier']).default('supplier'),
+  requestMode: z.enum(['rfq', 'auction']).default('rfq'),
+  auctionStartDate: z.number().int().nullable().optional(),
+  auctionEndDate: z.number().int().nullable().optional(),
   neededDate: z.number().int().nullable().optional(),
   expiryHours: z.number().int().min(1).max(8760).optional(),
 });
@@ -39,6 +43,8 @@ const serviceBodySchema = z.object({
   description: z.string().trim().max(5000).default(''),
   yearsOfExperience: z.string().trim().max(20).default(''),
   price: z.string().trim().max(40).default(''),
+  onsitePrice: z.string().trim().max(40).default(''),
+  onlinePrice: z.string().trim().max(40).default(''),
   serviceDate: z.number().int().nullable().optional(),
   expiryHours: z.number().int().min(1).max(8760).optional(),
   location: z.string().trim().max(500).default(''),
@@ -53,6 +59,7 @@ const goldBodySchema = z.object({
   weight: z.string().trim().max(40).default(''),
   purityLabel: z.string().trim().max(80).default(''),
   price: z.string().trim().max(40).default(''),
+  auctionStartDate: z.number().int().nullable().optional(),
   auctionEndDate: z.number().int().nullable().optional(),
   location: z.string().trim().max(500).default(''),
   media: mediaSchema,
@@ -97,15 +104,34 @@ export const submitListingOfferBodySchema = z.object({
       .max(40)
       .regex(/^\d+(\.\d{1,2})?$/, 'Enter a valid amount'),
     units: z.number().int().min(1).max(9999).optional(),
+    fulfillment: z.enum(['rent', 'sale']).optional(),
+    delivery: z.enum(['onsite', 'online']).optional(),
+  }),
+});
+
+export const updateEquipmentUnitsSchema = z.object({
+  params: z.object({
+    id: z.string().uuid(),
+  }),
+  body: z.object({
+    units: z.number().int().min(1).max(9999),
+  }),
+});
+
+export const equipmentStockReturnParamsSchema = z.object({
+  params: z.object({
+    id: z.string().uuid(),
+    holdId: z.string().uuid(),
   }),
 });
 
 export const listingOfferActionParamsSchema = z.object({
   params: z.object({
     id: z.string().uuid(),
-    offerId: z.string().uuid(),
+    offerId: z.string().trim().min(1).max(64),
   }),
 });
 
+export type UpdateEquipmentUnitsBody = z.infer<typeof updateEquipmentUnitsSchema>['body'];
 export type SubmitListingOfferBody = z.infer<typeof submitListingOfferBodySchema>['body'];
 export type ListingOfferActionParams = z.infer<typeof listingOfferActionParamsSchema>['params'];

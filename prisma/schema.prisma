@@ -60,6 +60,7 @@ model User {
   sentMessages    Message[]
   readReceipts    ConversationReadReceipt[]
   inboxItems      InAppNotification[]
+  equipmentHolds  EquipmentHold[]
 
   @@map("users")
 }
@@ -137,6 +138,7 @@ enum ListingStatus {
 enum EquipmentMode {
   rent
   sell
+  both
 }
 
 enum ServiceListingType {
@@ -167,13 +169,21 @@ enum MarketplaceRole {
   supplier
 }
 
+enum ListingRequestMode {
+  rfq
+  auction
+}
+
 model Listing {
   id        String          @id @default(uuid())
   ownerId   String
   category  ListingCategory
   status    ListingStatus   @default(ACTIVE)
   postedAs  MarketplaceRole @default(supplier)
+  requestMode ListingRequestMode @default(rfq)
   title     String
+  /** RFQ-26-0001, AUC-26-0001, or SEQ-26-0001. */
+  reference String          @unique
   description String        @default("")
   location  String          @default("")
 
@@ -182,6 +192,7 @@ model Listing {
   hourlyRental         String?
   monthlyRental        String?
   weeklyRental         String?
+  yearlyRental         String?
   salePrice            String?
   units                Int?
   deliveryAvailable    Boolean?
@@ -192,6 +203,8 @@ model Listing {
   serviceCategoryLabel   String?
   yearsOfExperience      String?
   price                  String?
+  onsitePrice            String?
+  onlinePrice            String?
   serviceDate            DateTime?
 
   weight         String?
@@ -207,10 +220,76 @@ model Listing {
   owner          User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   media          ListingMedia[]
   conversations  Conversation[]
+  equipmentHolds EquipmentHold[]
+  serviceOfferChoices ServiceOfferChoice[]
 
   @@index([ownerId, category, createdAt])
   @@index([postedAs, category, createdAt])
   @@map("listings")
+}
+
+model ListingReferenceCounter {
+  prefix String
+  year   Int
+  next   Int    @default(1)
+
+  @@id([prefix, year])
+  @@map("listing_reference_counters")
+}
+
+enum ServiceDeliveryMode {
+  onsite
+  online
+}
+
+/** How a sender chose to deliver a service listed as both onsite and online. */
+model ServiceOfferChoice {
+  id          String              @id @default(uuid())
+  listingId   String
+  responderId String
+  mode        ServiceDeliveryMode
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([listingId, responderId])
+  @@map("service_offer_choices")
+}
+
+enum EquipmentDealKind {
+  rent
+  sale
+}
+
+enum EquipmentHoldStatus {
+  pending
+  selected
+  active
+  rejected
+  declined
+  withdrawn
+  returned
+}
+
+/** Units reserved on a supplier equipment listing. RFQ stays open; stock lives here. */
+model EquipmentHold {
+  id        String              @id @default(uuid())
+  listingId String
+  offerId   String              @unique
+  buyerId   String
+  kind      EquipmentDealKind
+  units     Int
+  price     String              @default("")
+  status    EquipmentHoldStatus @default(pending)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyer   User    @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+
+  @@index([listingId, status])
+  @@map("equipment_holds")
 }
 
 model ListingMedia {

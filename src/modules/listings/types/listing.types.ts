@@ -25,6 +25,11 @@ export type ListingRfqOfferDto = {
   status: string;
   price?: string;
   quantity?: number;
+  rank?: number;
+  kind?: 'rent' | 'sale';
+  delivery?: 'onsite' | 'online';
+  /** Set for the listing owner once this offer is confirmed. */
+  responderPhone?: string;
 };
 
 export type ListingRfqDto = {
@@ -33,6 +38,7 @@ export type ListingRfqDto = {
   statusLabel: string;
   statusVariant: 'muted' | 'accent' | 'warning' | 'success';
   expiresAt: number | null;
+  currentPrice?: string;
   offersCount?: number;
   canSubmitOffer?: boolean;
   canDecideOffers?: boolean;
@@ -43,6 +49,11 @@ export type ListingRfqDto = {
   myOfferStatus?: string;
   myOfferPrice?: string;
   myOfferQuantity?: number;
+  myOfferKind?: 'rent' | 'sale';
+  myOfferDelivery?: 'onsite' | 'online';
+  /** Listing owner's phone, shown to the confirmed sender. */
+  ownerPhone?: string;
+  isLeading?: boolean;
   offers?: ListingRfqOfferDto[];
 };
 
@@ -50,21 +61,26 @@ export type EquipmentListingDto = {
   id: string;
   ownerId: string;
   category: 'equipment';
-  mode: 'rent' | 'sell';
+  mode: 'rent' | 'sell' | 'both';
   equipmentTypeLabel: string;
   title: string;
+  reference: string;
   description: string;
   hourlyRental: string;
   monthlyRental: string;
   weeklyRental: string;
+  yearlyRental: string;
   salePrice: string;
   units: number;
+  /** Units still in the catalog after accepted sales and active rentals. */
+  availableUnits?: number;
   location: string;
   media: ListingMediaDto[];
   deliveryAvailable: boolean;
   deliveryType: 'free' | 'perKm';
   deliveryPricePerKm: string;
   postedAs: 'buyer' | 'supplier';
+  requestMode: 'rfq' | 'auction';
   neededDate: number | null;
   owner: ListingOwnerDto;
   createdAt: number;
@@ -78,9 +94,12 @@ export type ServiceListingDto = {
   serviceType: 'onsite' | 'online' | 'both';
   serviceCategoryLabel: string;
   title: string;
+  reference: string;
   description: string;
   yearsOfExperience: string;
   price: string;
+  onsitePrice: string;
+  onlinePrice: string;
   serviceDate: number | null;
   location: string;
   media: ListingMediaDto[];
@@ -95,6 +114,7 @@ export type GoldListingDto = {
   ownerId: string;
   category: 'gold';
   title: string;
+  reference: string;
   description: string;
   weight: string;
   purityLabel: string;

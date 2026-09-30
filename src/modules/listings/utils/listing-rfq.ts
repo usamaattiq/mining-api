@@ -1,3 +1,5 @@
+import { auctionClient } from '../../../integrations/auction/auction.client';
+import type { AuctionSnapshot } from '../../../integrations/auction/auction.types';
 import { rfqClient } from '../../../integrations/rfq/rfq.client';
 import type { RfqOfferSummary, RfqSnapshot } from '../../../integrations/rfq/rfq.types';
 import { listingRepository } from '../repositories/listing.repository';
@@ -51,6 +53,59 @@ function mapOffer(offer: RfqOfferSummary): ListingRfqOfferDto {
     status: offer.status,
     ...(offer.price != null ? { price: String(offer.price) } : {}),
     ...(quantity != null ? { quantity } : {}),
+    ...(offer.rank != null ? { rank: offer.rank } : {}),
+  };
+}
+
+function myOfferStatus(snapshot: AuctionSnapshot): string {
+  if (snapshot.participant_status === 'timed_out') return 'timed_out';
+  if (snapshot.participant_status === 'declined') return 'declined';
+  if (snapshot.participant_status === 'withdrawn') return 'withdrawn';
+  if (snapshot.status === 'awaiting-your-confirmation') return 'selected';
+  if (snapshot.status === 'completed') return 'confirmed';
+  return 'active';
+}
+
+/** Auction snapshots reuse the listing RFQ shape the app already renders. */
+export function auctionSnapshotToRfq(snapshot: AuctionSnapshot): RfqSnapshot {
+  const selectedId = snapshot.selected_participant_id
+    ? String(snapshot.selected_participant_id)
+    : undefined;
+  const offers = (snapshot.ranking ?? []).map((row) => ({
+    id: String(row.participant_id),
+    responder_id: String(row.participant_id),
+    status: String(row.participant_id) === selectedId ? 'selected' : 'active',
+    price: row.peak_amount,
+    rank: row.rank,
+  }));
+  const myOffers =
+    snapshot.has_participated || snapshot.my_peak_amount != null
+      ? [
+          {
+            id: 'mine',
+            status: myOfferStatus(snapshot),
+            price: snapshot.my_peak_amount,
+          },
+        ]
+      : [];
+  return {
+    id: String(snapshot.id),
+    status: snapshot.status,
+    status_label: snapshot.status_label,
+    status_variant: snapshot.status_variant,
+    external_ref: snapshot.external_ref,
+    expires_at: snapshot.ends_at,
+    ...(snapshot.current_amount != null ? { current_amount: snapshot.current_amount } : {}),
+    ...(offers.length > 0 ? { offers } : {}),
+    ...(myOffers.length > 0 ? { my_offers: myOffers } : {}),
+    ...(snapshot.is_leading != null ? { is_leading: snapshot.is_leading } : {}),
+    actions: {
+      can_submit_offer: snapshot.actions?.can_place_bid,
+      can_select: snapshot.actions?.can_select_next,
+      can_withdraw: snapshot.actions?.can_withdraw,
+      can_confirm: snapshot.actions?.can_confirm,
+      can_decline: snapshot.actions?.can_decline,
+    },
   };
 }
 
@@ -69,6 +124,7 @@ export function toListingRfqDto(snapshot: RfqSnapshot): ListingRfqDto {
     statusLabel: snapshot.status_label,
     statusVariant: snapshot.status_variant,
     expiresAt: snapshot.expires_at ? new Date(snapshot.expires_at).getTime() : null,
+    ...(snapshot.current_amount != null ? { currentPrice: String(snapshot.current_amount) } : {}),
     ...(offersCount !== undefined ? { offersCount } : {}),
     canSubmitOffer: snapshot.actions?.can_submit_offer,
     canDecideOffers: snapshot.actions?.can_select,
@@ -83,6 +139,7 @@ export function toListingRfqDto(snapshot: RfqSnapshot): ListingRfqDto {
           ...(mappedMyOffer.quantity != null ? { myOfferQuantity: mappedMyOffer.quantity } : {}),
         }
       : {}),
+    ...(snapshot.is_leading ? { isLeading: true } : {}),
     ...(offers ? { offers } : {}),
   };
 }
@@ -102,21 +159,73 @@ export async function attachRfqStatuses(
   );
   if (byListingId.size === 0) return listings;
 
-  const snapshots = rfqClient.isConfigured()
-    ? await rfqClient.getSnapshots([...byListingId.values()], viewerId)
-    : new Map<string, RfqSnapshot>();
+  const goldIds: string[] = [];
+  const rfqIds: string[] = [];
+  for (const row of rows) {
+    if (!row.rfqId) continue;
+    if (row.category === 'gold' || row.requestMode === 'auction') goldIds.push(row.rfqId);
+    else rfqIds.push(row.rfqId);
+  }
+
+  const [rfqSnapshots, auctionSnapshots] = await Promise.all([
+    rfqClient.isConfigured() && rfqIds.length > 0
+      ? rfqClient.getSnapshots(rfqIds, viewerId)
+      : Promise.resolve(new Map<string, RfqSnapshot>()),
+    loadAuctionSnapshots(goldIds, viewerId),
+  ]);
 
   return listings.map((listing) => {
-    const rfqId = byListingId.get(listing.id);
-    if (!rfqId) return listing;
-    return withRfq(listing, snapshots.get(rfqId));
+    const remoteId = byListingId.get(listing.id);
+    if (!remoteId) return listing;
+    const snapshot =
+      listing.category === 'gold' ||
+      (listing.category === 'equipment' && listing.requestMode === 'auction')
+        ? auctionSnapshots.get(remoteId)
+        : rfqSnapshots.get(remoteId);
+    return withRfq(listing, snapshot);
   });
+}
+
+async function loadAuctionSnapshots(
+  auctionIds: string[],
+  viewerId: string,
+): Promise<Map<string, RfqSnapshot>> {
+  const map = new Map<string, RfqSnapshot>();
+  if (!auctionClient.isConfigured() || auctionIds.length === 0) return map;
+  const rows = await Promise.all(
+    [...new Set(auctionIds)].map(async (id) => {
+      try {
+        const snapshot = await auctionClient.getSnapshot(id, viewerId);
+        return [id, auctionSnapshotToRfq(snapshot)] as const;
+      } catch {
+        return null;
+      }
+    }),
+  );
+  for (const row of rows) {
+    if (row) map.set(row[0], row[1]);
+  }
+  return map;
 }
 
 export async function createListingRfq(
   listing: ListingWithMedia,
   expiryHours = 24,
+  schedule?: { startsAt: number | null; endsAt: number | null; startingAmount: number },
 ): Promise<{ listing: ListingWithMedia; snapshot?: RfqSnapshot }> {
+  if (listing.category === 'gold') {
+    return createGoldAuction(listing, schedule);
+  }
+  if (listing.category === 'equipment' && listing.postedAs === 'supplier') {
+    return { listing };
+  }
+  if (
+    listing.category === 'equipment' &&
+    listing.postedAs === 'buyer' &&
+    listing.requestMode === 'auction'
+  ) {
+    return createEquipmentAuction(listing, schedule);
+  }
   if (!rfqClient.isConfigured()) return { listing };
   if (
     listing.category !== 'equipment' &&
@@ -132,12 +241,85 @@ export async function createListingRfq(
       listingId: listing.id,
       totalQuantity: listing.category === 'equipment' ? Math.max(listing.units ?? 1, 1) : 1,
       enforceCapacityLimit: false,
-      expiryHours: Math.min(8760, Math.max(1, Math.round(expiryHours) || 24)),
+      expiryHours:
+        listing.category === 'equipment' && listing.postedAs === 'supplier'
+          ? 8760
+          : Math.min(8760, Math.max(1, Math.round(expiryHours) || 24)),
     });
     const updated = await listingRepository.setRfqId(listing.id, snapshot.id);
     return { listing: updated, snapshot };
   } catch (error) {
     console.error('Failed to create RFQ for listing', { listingId: listing.id, error });
+    return { listing };
+  }
+}
+
+async function createEquipmentAuction(
+  listing: ListingWithMedia,
+  schedule?: { startsAt: number | null; endsAt: number | null; startingAmount: number },
+): Promise<{ listing: ListingWithMedia; snapshot?: RfqSnapshot }> {
+  if (!auctionClient.isConfigured()) return { listing };
+  const now = Date.now();
+  const startsAt = schedule?.startsAt ?? null;
+  const endsAt = schedule?.endsAt ?? null;
+  const durationMinutes =
+    startsAt != null && endsAt != null
+      ? Math.max(1, Math.round((endsAt - startsAt) / 60_000))
+      : 24 * 60;
+  const activateImmediately = startsAt == null || startsAt <= now;
+  try {
+    const snapshot = await auctionClient.createAuction({
+      ownerId: listing.ownerId,
+      listingId: listing.id,
+      startingAmount: 1,
+      durationMinutes,
+      ...(startsAt != null && !activateImmediately
+        ? { startsAt: new Date(startsAt).toISOString() }
+        : {}),
+      activateImmediately,
+    });
+    const updated = await listingRepository.setRfqId(listing.id, snapshot.id);
+    return { listing: updated, snapshot: auctionSnapshotToRfq(snapshot) };
+  } catch (error) {
+    console.error('Failed to create auction for equipment listing', {
+      listingId: listing.id,
+      error,
+    });
+    return { listing };
+  }
+}
+
+async function createGoldAuction(
+  listing: ListingWithMedia,
+  schedule?: { startsAt: number | null; endsAt: number | null; startingAmount: number },
+): Promise<{ listing: ListingWithMedia; snapshot?: RfqSnapshot }> {
+  if (!auctionClient.isConfigured()) return { listing };
+  const now = Date.now();
+  const startsAt = schedule?.startsAt ?? null;
+  const endsAt = schedule?.endsAt ?? listing.auctionEndDate?.getTime() ?? null;
+  const durationMinutes =
+    startsAt != null && endsAt != null
+      ? Math.max(1, Math.round((endsAt - startsAt) / 60_000))
+      : endsAt != null
+        ? Math.max(1, Math.round((endsAt - now) / 60_000))
+        : 60;
+  const activateImmediately = startsAt == null || startsAt <= now;
+
+  try {
+    const snapshot = await auctionClient.createAuction({
+      ownerId: listing.ownerId,
+      listingId: listing.id,
+      startingAmount: Math.max(1, Math.round(schedule?.startingAmount ?? 1)),
+      durationMinutes,
+      ...(startsAt != null && !activateImmediately
+        ? { startsAt: new Date(startsAt).toISOString() }
+        : {}),
+      activateImmediately,
+    });
+    const updated = await listingRepository.setRfqId(listing.id, snapshot.id);
+    return { listing: updated, snapshot: auctionSnapshotToRfq(snapshot) };
+  } catch (error) {
+    console.error('Failed to create auction for gold listing', { listingId: listing.id, error });
     return { listing };
   }
 }

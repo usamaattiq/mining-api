@@ -5,11 +5,13 @@ import { authenticateUser } from '../auth/middleware/authenticate-user';
 import { listingController } from './controllers/listing.controller';
 import {
   createListingBodySchema,
+  equipmentStockReturnParamsSchema,
   listingIdParamsSchema,
   listingOfferActionParamsSchema,
   listFeedQuerySchema,
   listListingsQuerySchema,
   submitListingOfferBodySchema,
+  updateEquipmentUnitsSchema,
 } from './validation/listing.schema';
 
 export const listingsRouter = Router();
@@ -78,6 +80,30 @@ listingsRouter.post(
   '/:id/offers',
   validate(listingIdParamsSchema.merge(submitListingOfferBodySchema)),
   wrap((req, res) => listingController.submitOffer(req, res)),
+);
+
+listingsRouter.get(
+  '/:id/stock',
+  validate(listingIdParamsSchema),
+  wrap((req, res) => listingController.listEquipmentStock(req, res)),
+);
+
+listingsRouter.patch(
+  '/:id/stock',
+  validate(updateEquipmentUnitsSchema),
+  wrap((req, res) => listingController.updateEquipmentUnits(req, res)),
+);
+
+listingsRouter.post(
+  '/:id/stock/:holdId/return',
+  validate(equipmentStockReturnParamsSchema),
+  wrap((req, res) => listingController.returnRentedUnits(req, res)),
+);
+
+listingsRouter.delete(
+  '/:id',
+  validate(listingIdParamsSchema),
+  wrap((req, res) => listingController.remove(req, res)),
 );
 
 listingsRouter.get(

@@ -21,6 +21,22 @@ class ListingRepository {
     return tx.listing.findUnique({ where: { id }, include: listingInclude });
   }
 
+  archive(id: string): Promise<ListingWithMedia> {
+    return prisma.listing.update({
+      where: { id },
+      data: { status: 'ARCHIVED' },
+      include: listingInclude,
+    });
+  }
+
+  setUnits(id: string, units: number): Promise<ListingWithMedia> {
+    return prisma.listing.update({
+      where: { id },
+      data: { units },
+      include: listingInclude,
+    });
+  }
+
   setRfqId(id: string, rfqId: string, tx: Tx | typeof prisma = prisma): Promise<ListingWithMedia> {
     return tx.listing.update({
       where: { id },
