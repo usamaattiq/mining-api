@@ -17,6 +17,11 @@ adminRouter.use(wrap((req, res, next) => requireAdmin(req, res, next)));
 
 const PAGE_SIZE = 30;
 
+function routeId(value: string | string[] | undefined): string {
+  const id = Array.isArray(value) ? value[0] : value;
+  return id ?? '';
+}
+
 function pageOf(value: unknown): number {
   const page = Number(value);
   return Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
@@ -82,7 +87,11 @@ adminRouter.get(
   '/users/:id',
   wrap(async (req, res) => {
     const user = await prisma.user.findFirst({
-      where: { id: req.params.id, deletedAt: null, accountType: { not: AccountType.ADMIN } },
+      where: {
+        id: routeId(req.params.id),
+        deletedAt: null,
+        accountType: { not: AccountType.ADMIN },
+      },
     });
     if (!user) throw new AppError('User not found', 404, ErrorCode.USER_NOT_FOUND);
     const listings = await prisma.listing.findMany({
@@ -114,7 +123,11 @@ adminRouter.patch(
   '/users/:id',
   wrap(async (req, res) => {
     const user = await prisma.user.findFirst({
-      where: { id: req.params.id, deletedAt: null, accountType: { not: AccountType.ADMIN } },
+      where: {
+        id: routeId(req.params.id),
+        deletedAt: null,
+        accountType: { not: AccountType.ADMIN },
+      },
     });
     if (!user) throw new AppError('User not found', 404, ErrorCode.USER_NOT_FOUND);
     const fullName = typeof req.body?.fullName === 'string' ? req.body.fullName.trim() : '';
@@ -146,11 +159,15 @@ adminRouter.patch(
       throw new AppError('status must be active or suspended', 400, ErrorCode.VALIDATION_ERROR);
     }
     const actorId = (req as AuthenticatedRequest).user?.id;
-    if (req.params.id === actorId) {
+    if (routeId(req.params.id) === actorId) {
       throw new AppError('You cannot change your own status', 400, ErrorCode.VALIDATION_ERROR);
     }
     const user = await prisma.user.findFirst({
-      where: { id: req.params.id, deletedAt: null, accountType: { not: AccountType.ADMIN } },
+      where: {
+        id: routeId(req.params.id),
+        deletedAt: null,
+        accountType: { not: AccountType.ADMIN },
+      },
     });
     if (!user) {
       throw new AppError('User not found', 404, ErrorCode.USER_NOT_FOUND);
@@ -205,7 +222,7 @@ adminRouter.patch(
       throw new AppError('status must be active or archived', 400, ErrorCode.VALIDATION_ERROR);
     }
     const status = req.body.status === 'archived' ? ListingStatus.ARCHIVED : ListingStatus.ACTIVE;
-    const listing = await prisma.listing.findUnique({ where: { id: req.params.id } });
+    const listing = await prisma.listing.findUnique({ where: { id: routeId(req.params.id) } });
     if (!listing) {
       throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
     }
@@ -289,7 +306,7 @@ adminRouter.patch(
   wrap(async (req, res) => {
     const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
     if (!name) throw new AppError('Name is required', 400, ErrorCode.VALIDATION_ERROR);
-    const label = await prisma.catalogLabel.findUnique({ where: { id: req.params.id } });
+    const label = await prisma.catalogLabel.findUnique({ where: { id: routeId(req.params.id) } });
     if (!label) throw new AppError('Category not found', 404, ErrorCode.NOT_FOUND);
     const updated = await prisma.catalogLabel.update({
       where: { id: label.id },
@@ -302,7 +319,7 @@ adminRouter.patch(
 adminRouter.delete(
   '/categories/:id',
   wrap(async (req, res) => {
-    const label = await prisma.catalogLabel.findUnique({ where: { id: req.params.id } });
+    const label = await prisma.catalogLabel.findUnique({ where: { id: routeId(req.params.id) } });
     if (!label) throw new AppError('Category not found', 404, ErrorCode.NOT_FOUND);
     await prisma.catalogLabel.delete({ where: { id: label.id } });
     sendSuccess(res, 200, { id: label.id });
