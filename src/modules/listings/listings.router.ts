@@ -1,5 +1,7 @@
 import { Router } from 'express';
+import { prisma } from '../../common/database/prisma';
 import { wrap } from '../../common/http/wrap';
+import { sendSuccess } from '../../common/http/api-response';
 import { validate } from '../../common/validation/validate';
 import { authenticateUser } from '../auth/middleware/authenticate-user';
 import { listingController } from './controllers/listing.controller';
@@ -39,6 +41,23 @@ listingsRouter.get(
 listingsRouter.get(
   '/rfq-health',
   wrap((req, res) => listingController.rfqHealth(req, res)),
+);
+
+listingsRouter.get(
+  '/catalog',
+  wrap(async (req, res) => {
+    const category = req.query.category;
+    if (category !== 'equipment' && category !== 'services' && category !== 'gold') {
+      sendSuccess(res, 200, { names: [] as string[] });
+      return;
+    }
+    const rows = await prisma.catalogLabel.findMany({
+      where: { category },
+      orderBy: { name: 'asc' },
+      select: { name: true },
+    });
+    sendSuccess(res, 200, { names: rows.map((row) => row.name) });
+  }),
 );
 
 listingsRouter.post(

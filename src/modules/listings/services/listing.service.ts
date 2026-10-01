@@ -446,7 +446,12 @@ class ListingService {
     if (!listing || listing.status !== 'ACTIVE') {
       throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
     }
-    const [dto] = await attachRfqStatuses([toListingDto(listing)], [listing], viewerId);
+    const viewer = await prisma.user.findUnique({
+      where: { id: viewerId },
+      select: { accountType: true },
+    });
+    const rfqViewerId = viewer?.accountType === 'ADMIN' ? listing.ownerId : viewerId;
+    const [dto] = await attachRfqStatuses([toListingDto(listing)], [listing], rfqViewerId);
     if (!dto) {
       throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
     }

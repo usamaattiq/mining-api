@@ -9,7 +9,7 @@ export interface UserProfileDto {
   latitude: number | null;
   longitude: number | null;
   avatarUrl: string | null;
-  accountType: 'individual' | 'company';
+  accountType: 'individual' | 'company' | 'admin';
   companyName: string | null;
   biometricEnabled: boolean;
   isVerified: boolean;
