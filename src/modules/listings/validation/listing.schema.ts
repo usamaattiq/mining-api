@@ -132,6 +132,19 @@ export const listingOfferActionParamsSchema = z.object({
   }),
 });
 
+export const updateListingOfferSchema = listingOfferActionParamsSchema.extend({
+  body: z.object({
+    price: z
+      .string()
+      .trim()
+      .min(1)
+      .max(40)
+      .regex(/^\d+(\.\d{1,2})?$/, 'Enter a valid amount'),
+    units: z.number().int().min(1).max(9999),
+  }),
+});
+
 export type UpdateEquipmentUnitsBody = z.infer<typeof updateEquipmentUnitsSchema>['body'];
+export type UpdateListingOfferBody = z.infer<typeof updateListingOfferSchema>['body'];
 export type SubmitListingOfferBody = z.infer<typeof submitListingOfferBodySchema>['body'];
 export type ListingOfferActionParams = z.infer<typeof listingOfferActionParamsSchema>['params'];

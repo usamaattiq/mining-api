@@ -13,7 +13,12 @@ export function toUserProfileDto(user: User, options: { hasMpin: boolean }): Use
     latitude: user.latitude,
     longitude: user.longitude,
     avatarUrl: user.avatarUrl,
-    accountType: user.accountType === 'COMPANY' ? 'company' : 'individual',
+    accountType:
+      user.accountType === 'ADMIN'
+        ? 'admin'
+        : user.accountType === 'COMPANY'
+          ? 'company'
+          : 'individual',
     companyName: user.companyName,
     biometricEnabled: user.biometricEnabled,
     isVerified: user.isVerified,

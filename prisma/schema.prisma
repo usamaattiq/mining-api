@@ -27,6 +27,7 @@ enum UserStatus {
 enum AccountType {
   INDIVIDUAL
   COMPANY
+  ADMIN
 }
 
 model User {
@@ -226,6 +227,18 @@ model Listing {
   @@index([ownerId, category, createdAt])
   @@index([postedAs, category, createdAt])
   @@map("listings")
+}
+
+/** Admin-managed label inside Equipment, Services, or Gold. */
+model CatalogLabel {
+  id        String          @id @default(uuid())
+  category  ListingCategory
+  name      String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([category, name])
+  @@map("catalog_labels")
 }
 
 model ListingReferenceCounter {

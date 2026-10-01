@@ -60,7 +60,7 @@ const envSchema = z.object({
    * Comma-separated E.164 numbers that always accept REVIEW_OTP_CODE (App Store / Play review).
    * WhatsApp is skipped for these numbers.
    */
-  REVIEW_OTP_PHONES: z.string().default('+923001122334'),
+  REVIEW_OTP_PHONES: z.string().default('+923001122334,+923211122334'),
   REVIEW_OTP_CODE: z
     .string()
     .regex(/^\d{6}$/)

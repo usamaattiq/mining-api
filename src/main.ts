@@ -6,6 +6,7 @@ import http from 'http';
 import pino from 'pino';
 import { notificationsRouter } from './modules/notifications/notifications.router';
 import { authRoutes } from './modules/auth/auth.routes';
+import { adminRouter } from './modules/admin/admin.router';
 import { listingsRouter } from './modules/listings/listings.router';
 import { messagesRouter } from './modules/messages/messages.router';
 import { uploadsRouter } from './modules/uploads/uploads.router';
@@ -32,6 +33,7 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/listings', listingsRouter);
+app.use('/api/admin', adminRouter);
 app.use('/api/messages', messagesRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/uploads', uploadsRouter);

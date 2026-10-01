@@ -446,7 +446,12 @@ class ListingService {
     if (!listing || listing.status !== 'ACTIVE') {
       throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
     }
-    const [dto] = await attachRfqStatuses([toListingDto(listing)], [listing], viewerId);
+    const viewer = await prisma.user.findUnique({
+      where: { id: viewerId },
+      select: { accountType: true },
+    });
+    const rfqViewerId = viewer?.accountType === 'ADMIN' ? listing.ownerId : viewerId;
+    const [dto] = await attachRfqStatuses([toListingDto(listing)], [listing], rfqViewerId);
     if (!dto) {
       throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
     }
@@ -747,6 +752,46 @@ class ListingService {
       data: { status: 'returned' },
     });
     return this.listEquipmentStock(listingId, viewerId);
+  }
+
+  async updateOffer(
+    listingId: string,
+    viewerId: string,
+    offerId: string,
+    input: { price: string; units: number },
+  ): Promise<ListingDto> {
+    const listing = await listingRepository.findById(listingId);
+    if (!listing || listing.status !== 'ACTIVE' || !isSupplierEquipment(listing)) {
+      throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
+    }
+    const hold = await prisma.equipmentHold.findFirst({
+      where: { offerId, listingId: listing.id },
+    });
+    if (!hold || hold.buyerId !== viewerId) {
+      throw new AppError('Offer not found', 404, ErrorCode.NOT_FOUND);
+    }
+    if (hold.status !== 'pending') {
+      throw new AppError('This offer can no longer be updated', 400, ErrorCode.VALIDATION_ERROR);
+    }
+    const totalUnits = Math.max(listing.units ?? 1, 1);
+    const available = await availableUnitsFor(listing.id, totalUnits);
+    const units = Math.max(input.units, 1);
+    if (available < 1 || units > available) {
+      throw new AppError(
+        available < 1
+          ? 'No units left on this listing'
+          : `Only ${available} units are still available`,
+        400,
+        ErrorCode.VALIDATION_ERROR,
+      );
+    }
+    const unitPrice = Number(input.price);
+    const totalPrice = Math.round(unitPrice * units * 100) / 100;
+    await prisma.equipmentHold.update({
+      where: { id: hold.id },
+      data: { units, price: String(totalPrice) },
+    });
+    return this.getById(listing.id, viewerId);
   }
 
   private async submitEquipmentOffer(
