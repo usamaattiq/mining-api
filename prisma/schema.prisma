@@ -234,10 +234,14 @@ model CatalogLabel {
   id        String          @id @default(uuid())
   category  ListingCategory
   name      String
+  parentId  String?
+  parent    CatalogLabel?   @relation("CatalogTree", fields: [parentId], references: [id])
+  children  CatalogLabel[]  @relation("CatalogTree")
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 
   @@unique([category, name])
+  @@index([parentId])
   @@map("catalog_labels")
 }
 

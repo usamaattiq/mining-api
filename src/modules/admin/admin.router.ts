@@ -275,6 +275,7 @@ adminRouter.get(
           labels: labels.map((label) => ({
             id: label.id,
             name: label.name,
+            parentId: label.parentId,
             count: counts.get(label.name) ?? 0,
           })),
         };
@@ -289,13 +290,20 @@ adminRouter.post(
   wrap(async (req, res) => {
     const category = req.body?.category as ListingCategory;
     const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+    const parentId = typeof req.body?.parentId === 'string' ? req.body.parentId : null;
     if (!['equipment', 'services', 'gold'].includes(category) || !name) {
       throw new AppError('Category and name are required', 400, ErrorCode.VALIDATION_ERROR);
+    }
+    if (parentId) {
+      const parent = await prisma.catalogLabel.findUnique({ where: { id: parentId } });
+      if (!parent || parent.category !== category) {
+        throw new AppError('Parent category not found', 404, ErrorCode.NOT_FOUND);
+      }
     }
     const created = await prisma.catalogLabel.upsert({
       where: { category_name: { category, name } },
       update: {},
-      create: { category, name },
+      create: { category, name, parentId },
     });
     sendSuccess(res, 201, { id: created.id, name: created.name });
   }),
@@ -321,6 +329,10 @@ adminRouter.delete(
   wrap(async (req, res) => {
     const label = await prisma.catalogLabel.findUnique({ where: { id: routeId(req.params.id) } });
     if (!label) throw new AppError('Category not found', 404, ErrorCode.NOT_FOUND);
+    const childCount = await prisma.catalogLabel.count({ where: { parentId: label.id } });
+    if (childCount > 0) {
+      throw new AppError('Delete subcategories first', 409, ErrorCode.CONFLICT);
+    }
     await prisma.catalogLabel.delete({ where: { id: label.id } });
     sendSuccess(res, 200, { id: label.id });
   }),
