@@ -290,7 +290,7 @@ class ListingService {
         {
           userId: ownerId,
           titleKey: 'notifications.listingLiveTitle',
-          bodyKey: 'notifications.listingLiveBody',
+          bodyKey: `"${input.title}" is now live.`,
           icon: 'checkmark-circle-outline',
           target: 'Requests',
           listingId: created.id,
@@ -343,8 +343,8 @@ class ListingService {
     void notifyService
       .notifyUser({
         userId: ownerId,
-        title: 'Listing is live',
-        body: `"${listing.title}" is now visible to buyers.`,
+        title: 'Your listing is live',
+        body: `"${listing.title}" is now live.`,
         deepLink: `miningmobile://listing/${listing.category}/${listing.id}`,
         data: { listingId: listing.id, category: listing.category },
         idempotencyKey: `listing-live-${listing.id}`,
@@ -577,8 +577,8 @@ class ListingService {
 
     notifyListingRfq(
       listing.ownerId,
-      'New offer received',
-      `Someone submitted an offer on "${listing.title}".`,
+      'New offer',
+      `You received an offer on "${listing.title}".`,
       listing,
       `rfq-offer:${listing.rfqId}:${viewerId}`,
     );
@@ -653,16 +653,16 @@ class ListingService {
     if (action === 'select' && responderId) {
       notifyListingRfq(
         responderId,
-        'You were selected',
-        `Your offer on "${listing.title}" was selected. Confirm to proceed.`,
+        'Offer accepted',
+        `Your offer on "${listing.title}" was accepted. Confirm to continue.`,
         listing,
         `rfq-select:${offerId}`,
       );
     } else if (action === 'reject' && responderId) {
       notifyListingRfq(
         responderId,
-        'Offer rejected',
-        `Your offer on "${listing.title}" was not accepted.`,
+        'Offer declined',
+        `Your offer on "${listing.title}" was declined.`,
         listing,
         `rfq-reject:${offerId}`,
       );
@@ -670,7 +670,7 @@ class ListingService {
       notifyListingRfq(
         listing.ownerId,
         'Offer confirmed',
-        `An offer on "${listing.title}" was confirmed.`,
+        `An offer on "${listing.title}" is confirmed.`,
         listing,
         `rfq-confirm:${offerId}`,
       );
@@ -678,7 +678,7 @@ class ListingService {
       notifyListingRfq(
         listing.ownerId,
         'Offer declined',
-        `A selected offer on "${listing.title}" was declined.`,
+        `The accepted offer on "${listing.title}" was declined.`,
         listing,
         `rfq-decline:${offerId}`,
       );
@@ -870,8 +870,8 @@ class ListingService {
     });
     notifyListingRfq(
       listing.ownerId,
-      'New offer received',
-      `Someone submitted an offer on "${listing.title}".`,
+      'New offer',
+      `You received an offer on "${listing.title}".`,
       listing,
       `equipment-offer:${offerId}`,
     );
@@ -912,19 +912,26 @@ class ListingService {
       await prisma.equipmentHold.update({ where: { id: hold.id }, data: { status: 'selected' } });
       notifyListingRfq(
         hold.buyerId,
-        'You were selected',
-        `Your offer on "${listing.title}" was selected. Confirm to proceed.`,
+        'Offer accepted',
+        `Your offer on "${listing.title}" was accepted. Confirm to continue.`,
         listing,
         `equipment-select:${hold.id}`,
       );
     } else if (action === 'reject' && hold.status === 'pending') {
       await prisma.equipmentHold.update({ where: { id: hold.id }, data: { status: 'rejected' } });
+      notifyListingRfq(
+        hold.buyerId,
+        'Offer declined',
+        `Your offer on "${listing.title}" was declined.`,
+        listing,
+        `equipment-reject:${hold.id}`,
+      );
     } else if (action === 'confirm' && hold.status === 'selected') {
       await prisma.equipmentHold.update({ where: { id: hold.id }, data: { status: 'active' } });
       notifyListingRfq(
         listing.ownerId,
         'Offer confirmed',
-        `An offer on "${listing.title}" was confirmed.`,
+        `An offer on "${listing.title}" is confirmed.`,
         listing,
         `equipment-confirm:${hold.id}`,
       );

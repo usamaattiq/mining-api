@@ -136,7 +136,7 @@ class MessageService {
         {
           userId: recipientId,
           titleKey: 'notifications.messageTitle',
-          bodyKey: 'notifications.messageBody',
+          bodyKey: text.slice(0, 120),
           icon: 'chatbubble-ellipses-outline',
           target: 'Messages',
           listingId: conversation.listingId,
@@ -167,7 +167,7 @@ class MessageService {
       .notifyUser({
         userId: recipientId,
         title: 'New message',
-        body: text.slice(0, 120),
+        body: `${updated.row.listing.title}: ${text.slice(0, 100)}`,
         deepLink: `miningmobile://conversation/${conversationId}`,
         data: { conversationId, listingId: conversation.listingId },
         idempotencyKey: `message-${updated.created.id}`,

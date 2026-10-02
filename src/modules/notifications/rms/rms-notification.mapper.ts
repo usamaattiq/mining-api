@@ -63,29 +63,29 @@ export function mapRmsEventToNotification(event: RmsNotificationEvent): Notifica
   switch (event.trigger) {
     case 'offer_submitted':
       return {
-        title: 'New offer received',
-        body: 'Someone submitted an offer on your request.',
+        title: 'New offer',
+        body: 'You received a new offer.',
         deepLink,
         data: baseData,
       };
     case 'offer_selected':
       return {
-        title: 'You were selected',
-        body: 'Your offer was selected. Please confirm before the deadline.',
+        title: 'Offer accepted',
+        body: 'Your offer was accepted. Confirm it before the deadline.',
         deepLink,
         data: baseData,
       };
     case 'confirmation_reminder':
       return {
-        title: 'Action required',
-        body: 'Please confirm your selected offer before the deadline expires.',
+        title: 'Confirm your offer',
+        body: 'Confirm your accepted offer before the deadline.',
         deepLink,
         data: baseData,
       };
     case 'offer_confirmed':
       return {
         title: 'Offer confirmed',
-        body: 'An offer on your request was confirmed.',
+        body: 'An offer on your listing is confirmed.',
         deepLink,
         data: baseData,
       };
@@ -93,56 +93,56 @@ export function mapRmsEventToNotification(event: RmsNotificationEvent): Notifica
     case 'offer_declined_by_responder':
       return {
         title: 'Offer declined',
-        body: 'An offer on your request was declined.',
+        body: 'An offer on your listing was declined.',
         deepLink,
         data: baseData,
       };
     case 'offer_timed_out':
       return {
-        title: 'Confirmation timed out',
-        body: 'A selected offer expired before confirmation.',
+        title: 'Offer expired',
+        body: 'An accepted offer expired before it was confirmed.',
         deepLink,
         data: baseData,
       };
     case 'offer_withdrawn':
       return {
         title: 'Offer withdrawn',
-        body: 'An offer on your request was withdrawn.',
+        body: 'An offer on your listing was withdrawn.',
         deepLink,
         data: baseData,
       };
     case 'rfq_partially_consolidated':
       return {
-        title: 'Request partially filled',
-        body: 'Your request is partially consolidated.',
+        title: 'Listing partly filled',
+        body: 'Part of your listing has been filled.',
         deepLink,
         data: baseData,
       };
     case 'rfq_completed':
       return {
-        title: 'Request completed',
-        body: 'Your request has been completed.',
+        title: 'Listing completed',
+        body: 'Your listing is complete.',
         deepLink,
         data: baseData,
       };
     case 'rfq_closed':
       return {
-        title: 'Request closed',
-        body: 'Your request was closed.',
+        title: 'Listing closed',
+        body: 'Your listing was closed.',
         deepLink,
         data: baseData,
       };
     case 'rfq_expired':
       return {
-        title: 'Request expired',
-        body: 'Your request expired with no deal.',
+        title: 'Listing expired',
+        body: 'Your listing expired without a deal.',
         deepLink,
         data: baseData,
       };
     case 'messaging_window_closing':
       return {
-        title: 'Messaging closing soon',
-        body: 'The messaging window for your request is about to close.',
+        title: 'Chat closing soon',
+        body: 'The chat for this listing closes soon.',
         deepLink,
         data: baseData,
       };

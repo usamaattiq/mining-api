@@ -2,6 +2,7 @@ import { env } from '../../../config/env';
 import { userRepository } from '../../auth/repositories/user.repository';
 import { listingRepository } from '../../listings/repositories/listing.repository';
 import { listingDeepLink } from '../../listings/utils/listing-rfq-notify';
+import { inboxRepository } from '../repositories/inbox.repository';
 import { notifyService } from '../services/notify.service';
 import {
   mapRmsEventToNotification,
@@ -43,6 +44,19 @@ export const rmsEventsService = {
       (await userRepository.findByRmsId(rmsRecipientId));
     if (!user) {
       return { delivered: false, reason: 'user_not_linked' };
+    }
+
+    if (copy.data.listingId && typeof copy.data.listingId === 'string') {
+      await inboxRepository
+        .create({
+          userId: user.id,
+          titleKey: copy.title,
+          bodyKey: copy.body,
+          icon: 'notifications-outline',
+          target: 'Requests',
+          listingId: copy.data.listingId,
+        })
+        .catch(() => undefined);
     }
 
     await notifyService.notifyUser({
