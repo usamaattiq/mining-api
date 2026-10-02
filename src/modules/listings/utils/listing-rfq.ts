@@ -250,7 +250,7 @@ export async function createListingRfq(
     return { listing: updated, snapshot };
   } catch (error) {
     console.error('Failed to create RFQ for listing', { listingId: listing.id, error });
-    return { listing };
+    throw error;
   }
 }
 
