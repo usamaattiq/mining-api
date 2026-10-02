@@ -37,10 +37,17 @@ adminRouter.get(
           ? AccountType.COMPANY
           : AccountType.INDIVIDUAL
         : undefined;
+    const status =
+      req.query.status === 'suspended'
+        ? UserStatus.SUSPENDED
+        : req.query.status === 'active'
+          ? UserStatus.ACTIVE
+          : undefined;
     const page = pageOf(req.query.page);
     const where = {
       deletedAt: null,
       accountType: accountType ?? { not: AccountType.ADMIN },
+      ...(status ? { status } : {}),
       ...(search
         ? {
             OR: [
@@ -190,17 +197,33 @@ adminRouter.get(
       req.query.category === 'gold'
         ? (req.query.category as ListingCategory)
         : undefined;
+    const now = new Date();
+    const statusWhere =
+      req.query.status === 'live'
+        ? { status: ListingStatus.ACTIVE, expiresAt: { gt: now } }
+        : req.query.status === 'past'
+          ? { OR: [{ status: ListingStatus.ARCHIVED }, { expiresAt: { lte: now } }] }
+          : req.query.status === 'archived'
+            ? { status: ListingStatus.ARCHIVED }
+            : req.query.status === 'active'
+              ? { status: ListingStatus.ACTIVE }
+              : {};
     const where = {
       ...(category ? { category } : {}),
-      ...(search
-        ? {
-            OR: [
-              { title: { contains: search, mode: 'insensitive' as const } },
-              { reference: { contains: search, mode: 'insensitive' as const } },
-              { location: { contains: search, mode: 'insensitive' as const } },
-            ],
-          }
-        : {}),
+      AND: [
+        statusWhere,
+        ...(search
+          ? [
+              {
+                OR: [
+                  { title: { contains: search, mode: 'insensitive' as const } },
+                  { reference: { contains: search, mode: 'insensitive' as const } },
+                  { location: { contains: search, mode: 'insensitive' as const } },
+                ],
+              },
+            ]
+          : []),
+      ],
     };
     const rows = await prisma.listing.findMany({
       where,
