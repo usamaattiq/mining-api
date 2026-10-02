@@ -37,10 +37,17 @@ adminRouter.get(
           ? AccountType.COMPANY
           : AccountType.INDIVIDUAL
         : undefined;
+    const status =
+      req.query.status === 'suspended'
+        ? UserStatus.SUSPENDED
+        : req.query.status === 'active'
+          ? UserStatus.ACTIVE
+          : undefined;
     const page = pageOf(req.query.page);
     const where = {
       deletedAt: null,
       accountType: accountType ?? { not: AccountType.ADMIN },
+      ...(status ? { status } : {}),
       ...(search
         ? {
             OR: [
@@ -190,17 +197,33 @@ adminRouter.get(
       req.query.category === 'gold'
         ? (req.query.category as ListingCategory)
         : undefined;
+    const now = new Date();
+    const statusWhere =
+      req.query.status === 'live'
+        ? { status: ListingStatus.ACTIVE, expiresAt: { gt: now } }
+        : req.query.status === 'past'
+          ? { OR: [{ status: ListingStatus.ARCHIVED }, { expiresAt: { lte: now } }] }
+          : req.query.status === 'archived'
+            ? { status: ListingStatus.ARCHIVED }
+            : req.query.status === 'active'
+              ? { status: ListingStatus.ACTIVE }
+              : {};
     const where = {
       ...(category ? { category } : {}),
-      ...(search
-        ? {
-            OR: [
-              { title: { contains: search, mode: 'insensitive' as const } },
-              { reference: { contains: search, mode: 'insensitive' as const } },
-              { location: { contains: search, mode: 'insensitive' as const } },
-            ],
-          }
-        : {}),
+      AND: [
+        statusWhere,
+        ...(search
+          ? [
+              {
+                OR: [
+                  { title: { contains: search, mode: 'insensitive' as const } },
+                  { reference: { contains: search, mode: 'insensitive' as const } },
+                  { location: { contains: search, mode: 'insensitive' as const } },
+                ],
+              },
+            ]
+          : []),
+      ],
     };
     const rows = await prisma.listing.findMany({
       where,
@@ -275,6 +298,7 @@ adminRouter.get(
           labels: labels.map((label) => ({
             id: label.id,
             name: label.name,
+            parentId: label.parentId,
             count: counts.get(label.name) ?? 0,
           })),
         };
@@ -289,13 +313,20 @@ adminRouter.post(
   wrap(async (req, res) => {
     const category = req.body?.category as ListingCategory;
     const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+    const parentId = typeof req.body?.parentId === 'string' ? req.body.parentId : null;
     if (!['equipment', 'services', 'gold'].includes(category) || !name) {
       throw new AppError('Category and name are required', 400, ErrorCode.VALIDATION_ERROR);
+    }
+    if (parentId) {
+      const parent = await prisma.catalogLabel.findUnique({ where: { id: parentId } });
+      if (!parent || parent.category !== category) {
+        throw new AppError('Parent category not found', 404, ErrorCode.NOT_FOUND);
+      }
     }
     const created = await prisma.catalogLabel.upsert({
       where: { category_name: { category, name } },
       update: {},
-      create: { category, name },
+      create: { category, name, parentId },
     });
     sendSuccess(res, 201, { id: created.id, name: created.name });
   }),
@@ -321,6 +352,10 @@ adminRouter.delete(
   wrap(async (req, res) => {
     const label = await prisma.catalogLabel.findUnique({ where: { id: routeId(req.params.id) } });
     if (!label) throw new AppError('Category not found', 404, ErrorCode.NOT_FOUND);
+    const childCount = await prisma.catalogLabel.count({ where: { parentId: label.id } });
+    if (childCount > 0) {
+      throw new AppError('Delete subcategories first', 409, ErrorCode.CONFLICT);
+    }
     await prisma.catalogLabel.delete({ where: { id: label.id } });
     sendSuccess(res, 200, { id: label.id });
   }),

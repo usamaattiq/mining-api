@@ -300,17 +300,6 @@ class ListingService {
       return created;
     });
 
-    void notifyService
-      .notifyUser({
-        userId: ownerId,
-        title: 'Listing is live',
-        body: `"${listing.title}" is now visible to buyers.`,
-        deepLink: `miningmobile://listing/${listing.category}/${listing.id}`,
-        data: { listingId: listing.id, category: listing.category },
-        idempotencyKey: `listing-live-${listing.id}`,
-      })
-      .catch(() => undefined);
-
     const expiryHours =
       input.category === 'equipment' || input.category === 'services'
         ? input.expiryHours
@@ -329,11 +318,39 @@ class ListingService {
               startingAmount: 1,
             }
           : undefined;
-    const { listing: withRfqRow, snapshot } = await createListingRfq(
-      listing,
-      expiryHours,
-      schedule,
-    );
+    let withRfqRow = listing;
+    let snapshot: Awaited<ReturnType<typeof createListingRfq>>['snapshot'];
+    try {
+      const created = await createListingRfq(listing, expiryHours, schedule);
+      withRfqRow = created.listing;
+      snapshot = created.snapshot;
+      if ((usesRfq || usesAuction) && !withRfqRow.rfqId) {
+        throw new AppError(
+          usesAuction ? 'Auction service is down' : 'RFQ Management System Down',
+          503,
+          ErrorCode.INTERNAL_ERROR,
+        );
+      }
+    } catch (error) {
+      await prisma.inAppNotification
+        .deleteMany({ where: { listingId: listing.id } })
+        .catch(() => undefined);
+      await prisma.listing.delete({ where: { id: listing.id } }).catch(() => undefined);
+      if (error instanceof AppError) throw error;
+      mapRfqError(error, usesAuction ? 'Auction service is down' : 'RFQ Management System Down');
+    }
+
+    void notifyService
+      .notifyUser({
+        userId: ownerId,
+        title: 'Listing is live',
+        body: `"${listing.title}" is now visible to buyers.`,
+        deepLink: `miningmobile://listing/${listing.category}/${listing.id}`,
+        data: { listingId: listing.id, category: listing.category },
+        idempotencyKey: `listing-live-${listing.id}`,
+      })
+      .catch(() => undefined);
+
     const [withStock] = await withEquipmentAvailability(
       [withRfq(toListingDto(withRfqRow), snapshot)],
       ownerId,
