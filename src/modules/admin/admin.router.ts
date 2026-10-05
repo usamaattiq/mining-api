@@ -47,7 +47,7 @@ adminRouter.get(
     const page = pageOf(req.query.page);
     const where = {
       deletedAt: null,
-      ...(accountType ? { accountType } : {}),
+      accountType: accountType ?? { not: AccountType.ADMIN },
       ...(status ? { status } : {}),
       ...(search
         ? {
@@ -103,11 +103,12 @@ adminRouter.get(
       where: {
         id: routeId(req.params.id),
         deletedAt: null,
+        accountType: { not: AccountType.ADMIN },
       },
     });
     if (!user) throw new AppError('User not found', 404, ErrorCode.USER_NOT_FOUND);
     const listings = await prisma.listing.findMany({
-      where: { ownerId: user.id },
+      where: { ownerId: user.id, status: ListingStatus.ACTIVE },
       orderBy: { createdAt: 'desc' },
       select: { id: true, title: true, reference: true, category: true, status: true },
     });
@@ -210,21 +211,10 @@ adminRouter.get(
       req.query.category === 'gold'
         ? (req.query.category as ListingCategory)
         : undefined;
-    const now = new Date();
-    const statusWhere =
-      req.query.status === 'live'
-        ? { status: ListingStatus.ACTIVE, expiresAt: { gt: now } }
-        : req.query.status === 'past'
-          ? { OR: [{ status: ListingStatus.ARCHIVED }, { expiresAt: { lte: now } }] }
-          : req.query.status === 'archived'
-            ? { status: ListingStatus.ARCHIVED }
-            : req.query.status === 'active'
-              ? { status: ListingStatus.ACTIVE }
-              : {};
     const where = {
+      status: ListingStatus.ACTIVE,
       ...(category ? { category } : {}),
       AND: [
-        statusWhere,
         ...(search
           ? [
               {
