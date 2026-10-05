@@ -7,6 +7,7 @@ import { sendSuccess } from '../../common/http/api-response';
 import type { AuthenticatedRequest } from '../../common/http/authenticated-request';
 import { wrap } from '../../common/http/wrap';
 import { authenticateUser } from '../auth/middleware/authenticate-user';
+import { userSessionRepository } from '../auth/repositories/user-session.repository';
 import { toListingDto } from '../listings/utils/listing.mapper';
 import { requireAdmin } from './require-admin';
 
@@ -189,6 +190,9 @@ adminRouter.patch(
       throw new AppError('User not found', 404, ErrorCode.USER_NOT_FOUND);
     }
     await prisma.user.update({ where: { id: user.id }, data: { status } });
+    if (status === UserStatus.SUSPENDED) {
+      await userSessionRepository.revokeAllForUser(user.id);
+    }
     sendSuccess(res, 200, {
       id: user.id,
       status: status === UserStatus.SUSPENDED ? 'suspended' : 'active',
