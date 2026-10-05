@@ -1,4 +1,4 @@
-import { AccountType } from '@prisma/client';
+import { AccountType, ListingCategory } from '@prisma/client';
 import { prisma } from '../src/common/database/prisma';
 import { hashSecret } from '../src/common/security/password.service';
 
@@ -71,7 +71,34 @@ async function seedReviewAccount(): Promise<void> {
   });
 }
 
+const CATALOG: { category: ListingCategory; name: string; parentName?: string }[] = [
+  { category: ListingCategory.equipment, name: 'Excavator' },
+  { category: ListingCategory.equipment, name: 'Loader' },
+  { category: ListingCategory.equipment, name: 'Bulldozer', parentName: 'Excavator' },
+  { category: ListingCategory.services, name: 'Drilling' },
+  { category: ListingCategory.gold, name: '17K' },
+  { category: ListingCategory.gold, name: '22K' },
+  { category: ListingCategory.gold, name: '24K' },
+];
+
+async function seedCatalog(): Promise<void> {
+  for (const item of CATALOG) {
+    const parent = item.parentName
+      ? await prisma.catalogLabel.findUnique({
+          where: { category_name: { category: item.category, name: item.parentName } },
+        })
+      : null;
+    await prisma.catalogLabel.upsert({
+      where: { category_name: { category: item.category, name: item.name } },
+      update: {},
+      create: { category: item.category, name: item.name, parentId: parent?.id ?? null },
+    });
+  }
+  console.info('[seed] Catalog labels ready');
+}
+
 seedReviewAccount()
+  .then(() => seedCatalog())
   .catch((error: unknown) => {
     console.error('[seed] Failed', error);
     process.exitCode = 1;

@@ -46,7 +46,7 @@ adminRouter.get(
     const page = pageOf(req.query.page);
     const where = {
       deletedAt: null,
-      accountType: accountType ?? { not: AccountType.ADMIN },
+      ...(accountType ? { accountType } : {}),
       ...(status ? { status } : {}),
       ...(search
         ? {
@@ -82,7 +82,12 @@ adminRouter.get(
       page,
       items: rows.map((row) => ({
         ...row,
-        accountType: row.accountType === AccountType.COMPANY ? 'company' : 'individual',
+        accountType:
+          row.accountType === AccountType.COMPANY
+            ? 'company'
+            : row.accountType === AccountType.ADMIN
+              ? 'admin'
+              : 'individual',
         status: row.status === UserStatus.SUSPENDED ? 'suspended' : 'active',
         createdAt: row.createdAt.toISOString(),
       })),
@@ -97,7 +102,6 @@ adminRouter.get(
       where: {
         id: routeId(req.params.id),
         deletedAt: null,
-        accountType: { not: AccountType.ADMIN },
       },
     });
     if (!user) throw new AppError('User not found', 404, ErrorCode.USER_NOT_FOUND);
@@ -115,7 +119,12 @@ adminRouter.get(
       latitude: user.latitude,
       longitude: user.longitude,
       avatarUrl: user.avatarUrl,
-      accountType: user.accountType === AccountType.COMPANY ? 'company' : 'individual',
+      accountType:
+        user.accountType === AccountType.COMPANY
+          ? 'company'
+          : user.accountType === AccountType.ADMIN
+            ? 'admin'
+            : 'individual',
       companyName: user.companyName,
       status: user.status === UserStatus.SUSPENDED ? 'suspended' : 'active',
       listings: listings.map((listing) => ({
