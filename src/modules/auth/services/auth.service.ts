@@ -169,7 +169,8 @@ class AuthService {
       user.id,
       input.deviceId,
     );
-    if (!isKnownDevice) {
+    const isOtpExempt = user.loginOtpExempt && user.accountType !== AccountType.ADMIN;
+    if (!isKnownDevice && !isOtpExempt) {
       await otpService.assertPhoneVerified(phoneE164, OtpPurpose.LOGIN);
     }
 

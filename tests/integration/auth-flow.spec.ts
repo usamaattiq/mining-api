@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
+import { AccountType } from '@prisma/client';
 import { prisma } from '../../src/common/database/prisma';
 import { authService } from '../../src/modules/auth/services/auth.service';
 import { verifyUserAccessToken } from '../../src/modules/auth/security/user-jwt.service';
 import { userSessionRepository } from '../../src/modules/auth/repositories/user-session.repository';
+import { resolvePhoneE164 } from '../../src/modules/auth/utils/resolve-phone';
 import { AppError } from '../../src/common/errors/app-error';
 import { ErrorCode } from '../../src/common/errors/error-codes';
 
@@ -102,6 +104,34 @@ describe('auth flow', () => {
     await authService.logout(payload.jti);
 
     expect(await userSessionRepository.isActive(payload.jti)).toBe(false);
+  });
+
+  it('loginOtpExempt skips the unknown-device OTP from any device, but never for an admin', async () => {
+    const phone = uniquePhone(randomUUID().replace(/\D/g, '').slice(0, 7));
+    await signUp(phone, 'device-EXEMPT01');
+    await prisma.user.update({
+      where: { phoneE164: resolvePhoneE164(phone) },
+      data: { loginOtpExempt: true },
+    });
+
+    // Brand-new device, no OTP sent/verified at all — still succeeds.
+    const exemptLogin = await authService.loginWithMpin({
+      ...phone,
+      mpin: '1234',
+      deviceId: 'device-NEVERSEEN',
+    });
+    expect(exemptLogin.accessToken).toBeTruthy();
+
+    const adminPhone = uniquePhone(randomUUID().replace(/\D/g, '').slice(0, 7));
+    await signUp(adminPhone, 'device-ADMINEXMPT');
+    await prisma.user.update({
+      where: { phoneE164: resolvePhoneE164(adminPhone) },
+      data: { loginOtpExempt: true, accountType: AccountType.ADMIN },
+    });
+
+    await expect(
+      authService.loginWithMpin({ ...adminPhone, mpin: '1234', deviceId: 'device-NEVERSEEN2' }),
+    ).rejects.toMatchObject({ status: 400 });
   });
 
   it('refresh rotates the token pair and rejects the old refresh token afterward', async () => {
