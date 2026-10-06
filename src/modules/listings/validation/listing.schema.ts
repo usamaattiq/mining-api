@@ -83,6 +83,8 @@ export const listingIdParamsSchema = z.object({
   }),
 });
 
+export const updateListingSchema = createListingBodySchema.merge(listingIdParamsSchema);
+
 export const listFeedQuerySchema = z.object({
   query: z.object({
     postedAs: z.enum(['buyer', 'supplier']),

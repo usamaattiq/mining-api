@@ -358,6 +358,54 @@ class ListingService {
     return withStock ?? withRfq(toListingDto(withRfqRow), snapshot);
   }
 
+  async update(listingId: string, ownerId: string, input: CreateListingBody): Promise<ListingDto> {
+    const listing = await listingRepository.findById(listingId);
+    if (!listing || listing.status !== 'ACTIVE') {
+      throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
+    }
+    if (listing.ownerId !== ownerId) {
+      throw new AppError('Only the listing owner can edit it', 403, ErrorCode.FORBIDDEN);
+    }
+    if (listing.category !== input.category) {
+      throw new AppError('Listing category cannot be changed', 400, ErrorCode.VALIDATION_ERROR);
+    }
+
+    if (
+      listing.category === 'equipment' &&
+      listing.postedAs === 'supplier' &&
+      input.category === 'equipment'
+    ) {
+      const holds = await prisma.equipmentHold.findMany({
+        where: { listingId, status: { in: ['selected', 'active'] } },
+        select: { units: true },
+      });
+      const reserved = holds.reduce((sum, hold) => sum + hold.units, 0);
+      if (input.units < reserved) {
+        throw new AppError(
+          'Units cannot be less than those already rented or sold',
+          400,
+          ErrorCode.VALIDATION_ERROR,
+        );
+      }
+    }
+
+    const postedAs = listing.postedAs;
+    const draft = listingCreateData(ownerId, { ...input, postedAs });
+    const { owner: _owner, media: _media, category: _category, ...fields } = draft;
+    await listingRepository.updateContent(
+      listing.id,
+      fields,
+      input.media.map((item, index) => ({
+        uri: item.uri,
+        kind: item.kind,
+        name: item.name,
+        key: item.key,
+        sortOrder: index,
+      })),
+    );
+    return this.getById(listing.id, ownerId);
+  }
+
   async listMine(ownerId: string, query: ListListingsQuery): Promise<ListingDto[]> {
     const rows = (
       await listingRepository.findMine({

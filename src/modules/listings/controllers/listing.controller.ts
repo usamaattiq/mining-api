@@ -21,6 +21,13 @@ export const listingController = {
     sendSuccess(res, 201, listing);
   },
 
+  async update(req: AuthenticatedRequest, res: Response) {
+    const params = req.validatedParams as ListingIdParams;
+    const body = req.validatedBody as CreateListingBody;
+    const listing = await listingService.update(params.id, req.user!.id, body);
+    sendSuccess(res, 200, listing);
+  },
+
   async listMine(req: AuthenticatedRequest, res: Response) {
     const query = (req.validatedQuery as ListListingsQuery | undefined) ?? {};
     const listings = await listingService.listMine(req.user!.id, query);
