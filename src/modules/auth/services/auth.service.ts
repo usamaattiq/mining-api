@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import { AccountType, OtpPurpose, UserStatus } from '@prisma/client';
 import { env } from '../../../config/env';
 import { runInTransaction } from '../../../common/database/transaction';
@@ -8,7 +9,12 @@ import { signUserAccessToken } from '../security/user-jwt.service';
 import { userCredentialRepository } from '../repositories/user-credential.repository';
 import { userRepository } from '../repositories/user.repository';
 import { userSessionRepository } from '../repositories/user-session.repository';
-import type { AuthLoginResultDto, AuthSignupResultDto, UserProfileDto } from '../types/auth.types';
+import type {
+  AuthLoginResultDto,
+  AuthRefreshResultDto,
+  AuthSignupResultDto,
+  UserProfileDto,
+} from '../types/auth.types';
 import type {
   ChangeMpinBody,
   LoginMpinBody,
@@ -123,6 +129,7 @@ class AuthService {
     return {
       userId: user.id,
       accessToken: loginResult.accessToken,
+      refreshToken: loginResult.refreshToken,
       profile: loginResult.profile,
     };
   }
@@ -312,23 +319,90 @@ class AuthService {
     this.assertCanAuthenticate(user.status);
 
     const signed = await signUserAccessToken({ sub: user.id });
+    const refresh = await generateRefreshSecret();
 
-    await runInTransaction(async (tx) => {
+    const session = await runInTransaction(async (tx) => {
       await userSessionRepository.revokeAllForUser(user.id, tx);
-      await userSessionRepository.create(
-        { userId: user.id, deviceId: options.deviceId, jti: signed.jti },
+      const created = await userSessionRepository.create(
+        {
+          userId: user.id,
+          deviceId: options.deviceId,
+          jti: signed.jti,
+          refreshTokenHash: refresh.hash,
+          refreshExpiresAt: refresh.expiresAt,
+        },
         tx,
       );
       await userRepository.touchLastLogin(user.id, tx);
+      return created;
     });
 
     const credential = await userCredentialRepository.findByUserId(user.id);
 
     return {
       accessToken: signed.token,
+      refreshToken: `${session.id}.${refresh.secret}`,
       profile: toUserProfileDto(user, { hasMpin: Boolean(credential) }),
     };
   }
+
+  async refreshSession(refreshToken: string): Promise<AuthRefreshResultDto> {
+    const [sessionId, secret] = refreshToken.split('.');
+    if (!sessionId || !secret) {
+      throw new AppError('Invalid or expired session', 401, ErrorCode.UNAUTHORIZED);
+    }
+
+    const session = await userSessionRepository.findById(sessionId);
+    if (
+      !session ||
+      session.revokedAt ||
+      !session.refreshTokenHash ||
+      !session.refreshExpiresAt ||
+      session.refreshExpiresAt.getTime() < Date.now()
+    ) {
+      throw new AppError('Invalid or expired session', 401, ErrorCode.UNAUTHORIZED);
+    }
+
+    const secretMatches = await verifySecret(secret, session.refreshTokenHash);
+    if (!secretMatches) {
+      // A previously-rotated-out refresh token being replayed is a sign of
+      // token theft, not normal usage — revoke the session defensively
+      // rather than just rejecting this one request.
+      await userSessionRepository.revokeByJti(session.jti);
+      throw new AppError('Invalid or expired session', 401, ErrorCode.UNAUTHORIZED);
+    }
+
+    this.assertCanAuthenticate((await this.requireUser(session.userId)).status);
+
+    const signed = await signUserAccessToken({ sub: session.userId });
+    const refresh = await generateRefreshSecret();
+
+    await userSessionRepository.rotate(session.id, {
+      jti: signed.jti,
+      refreshTokenHash: refresh.hash,
+      refreshExpiresAt: refresh.expiresAt,
+    });
+
+    return {
+      accessToken: signed.token,
+      refreshToken: `${session.id}.${refresh.secret}`,
+    };
+  }
+
+  private async requireUser(userId: string) {
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      throw new AppError('User not found', 404, ErrorCode.USER_NOT_FOUND);
+    }
+    return user;
+  }
+}
+
+async function generateRefreshSecret(): Promise<{ secret: string; hash: string; expiresAt: Date }> {
+  const secret = randomBytes(32).toString('hex');
+  const hash = await hashSecret(secret);
+  const expiresAt = new Date(Date.now() + env.REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000);
+  return { secret, hash, expiresAt };
 }
 
 export const authService = new AuthService();

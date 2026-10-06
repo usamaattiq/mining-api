@@ -10,6 +10,7 @@ import {
   loginOtpSendBodySchema,
   loginOtpVerifyBodySchema,
   logoutBodySchema,
+  refreshBodySchema,
   resetMpinBodySchema,
   signupEmailCheckBodySchema,
   signupOtpSendBodySchema,
@@ -101,4 +102,11 @@ authRoutes.post(
   wrap((req, res, next) => authenticateUser(req, res, next)),
   validate(logoutBodySchema),
   wrap((req, res) => authController.logout(req, res)),
+);
+
+authRoutes.post(
+  '/refresh',
+  authRateLimiter,
+  validate(refreshBodySchema),
+  wrap((req, res) => authController.refresh(req, res)),
 );

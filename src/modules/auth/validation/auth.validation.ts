@@ -165,6 +165,12 @@ export const logoutBodySchema = z.object({
     .default({}),
 });
 
+export const refreshBodySchema = z.object({
+  body: z.object({
+    refreshToken: z.string().trim().min(1).max(200),
+  }),
+});
+
 export type SignupOtpSendBody = z.infer<typeof signupOtpSendBodySchema>['body'];
 export type SignupOtpVerifyBody = z.infer<typeof signupOtpVerifyBodySchema>['body'];
 export type SignupSubmitBody = z.infer<typeof signupSubmitBodySchema>['body'];
@@ -175,3 +181,4 @@ export type LoginMpinBody = z.infer<typeof loginMpinBodySchema>['body'];
 export type ResetMpinBody = z.infer<typeof resetMpinBodySchema>['body'];
 export type ChangeMpinBody = z.infer<typeof changeMpinBodySchema>['body'];
 export type UpdateProfileBody = z.infer<typeof updateProfileBodySchema>['body'];
+export type RefreshBody = z.infer<typeof refreshBodySchema>['body'];

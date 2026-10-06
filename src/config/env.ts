@@ -46,7 +46,9 @@ const envSchema = z.object({
 
   // Auth
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
-  JWT_EXPIRES_IN: z.string().default('30d'),
+  /** Access token lifetime — short, because sessions now renew via /auth/refresh. */
+  JWT_EXPIRES_IN: z.string().default('15m'),
+  REFRESH_TOKEN_EXPIRES_IN_DAYS: z.coerce.number().default(30),
   OTP_EXPIRES_MINUTES: z.coerce.number().default(5),
   OTP_REAL_ENABLED: z
     .string()
