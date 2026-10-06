@@ -58,7 +58,7 @@ async function upsertAccount(input: {
   console.info(`[seed] Created account ${input.phoneE164}`);
 }
 
-async function seedReviewAccount(): Promise<void> {
+async function seedAccounts(): Promise<void> {
   await upsertAccount({
     phoneE164: REVIEW_PHONE,
     fullName: 'App Review',
@@ -97,8 +97,12 @@ async function seedCatalog(): Promise<void> {
   console.info('[seed] Catalog labels ready');
 }
 
-seedReviewAccount()
-  .then(() => seedCatalog())
+async function main(): Promise<void> {
+  await seedAccounts();
+  await seedCatalog();
+}
+
+main()
   .catch((error: unknown) => {
     console.error('[seed] Failed', error);
     process.exitCode = 1;

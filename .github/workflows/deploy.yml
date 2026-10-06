@@ -58,5 +58,6 @@ jobs:
             npm ci --ignore-scripts
             npx prisma generate
             npx prisma migrate deploy
+            npx prisma db seed
             npm run build
             pm2 restart dahabi-sudan --update-env
