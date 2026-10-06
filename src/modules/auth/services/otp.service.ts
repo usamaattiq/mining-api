@@ -21,15 +21,7 @@ function parsePhoneList(value: string): string[] {
     .filter(Boolean);
 }
 
-function isReviewOtpPhone(phoneE164: string): boolean {
-  return parsePhoneList(env.REVIEW_OTP_PHONES).includes(phoneE164);
-}
-
-function generateOtpCode(phoneE164: string): string {
-  if (isReviewOtpPhone(phoneE164)) {
-    return env.REVIEW_OTP_CODE;
-  }
-
+function generateOtpCode(): string {
   if (!env.OTP_REAL_ENABLED) {
     return DEV_OTP_CODE;
   }
@@ -38,10 +30,7 @@ function generateOtpCode(phoneE164: string): string {
 }
 
 function isRateLimitExemptPhone(phoneE164: string): boolean {
-  return (
-    isReviewOtpPhone(phoneE164) ||
-    parsePhoneList(env.OTP_RATE_LIMIT_EXEMPT_PHONES).includes(phoneE164)
-  );
+  return parsePhoneList(env.OTP_RATE_LIMIT_EXEMPT_PHONES).includes(phoneE164);
 }
 
 class OtpService {
@@ -61,17 +50,15 @@ class OtpService {
       );
     }
 
-    const code = generateOtpCode(phoneE164);
+    const code = generateOtpCode();
     const codeHash = await hashSecret(code);
     const expiresAt = new Date(Date.now() + env.OTP_EXPIRES_MINUTES * 60 * 1000);
 
     await otpChallengeRepository.create({ phoneE164, purpose, codeHash, expiresAt });
 
-    if (isReviewOtpPhone(phoneE164) || !env.OTP_REAL_ENABLED) {
-      // Review / local: do not send WhatsApp. Reviewers use the fixed code.
-      // env.ts refuses to boot in production unless OTP_REAL_ENABLED=true,
-      // so the !OTP_REAL_ENABLED branch only reaches here in dev/test —
-      // this check is defense in depth, not the primary guard.
+    if (!env.OTP_REAL_ENABLED) {
+      // Local/dev only — env.ts refuses to boot in production unless
+      // OTP_REAL_ENABLED=true, so this branch never reaches production.
       if (env.NODE_ENV !== 'production') {
         console.info(`[otp] ${purpose} code for ${phoneE164}: ${code}`);
       }
@@ -87,25 +74,6 @@ class OtpService {
   }
 
   async verifyOtp(phoneE164: string, purpose: OtpPurpose, otp: string): Promise<void> {
-    if (isReviewOtpPhone(phoneE164) && otp === env.REVIEW_OTP_CODE) {
-      const existing = await otpChallengeRepository.findLatest(phoneE164, purpose);
-      if (existing && !existing.verifiedAt) {
-        await otpChallengeRepository.markVerified(existing.id);
-        return;
-      }
-
-      const codeHash = await hashSecret(otp);
-      const expiresAt = new Date(Date.now() + env.OTP_EXPIRES_MINUTES * 60 * 1000);
-      const created = await otpChallengeRepository.create({
-        phoneE164,
-        purpose,
-        codeHash,
-        expiresAt,
-      });
-      await otpChallengeRepository.markVerified(created.id);
-      return;
-    }
-
     const challenge = await otpChallengeRepository.findLatest(phoneE164, purpose);
 
     if (!challenge || challenge.verifiedAt) {

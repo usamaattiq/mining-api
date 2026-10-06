@@ -1,73 +1,10 @@
-import { AccountType, ListingCategory } from '@prisma/client';
+import { ListingCategory } from '@prisma/client';
 import { prisma } from '../src/common/database/prisma';
-import { hashSecret } from '../src/common/security/password.service';
 
-const REVIEW_PHONE = '+923001122334';
-const REVIEW_MPIN = '0000';
-
-async function upsertAccount(input: {
-  phoneE164: string;
-  fullName: string;
-  accountType: AccountType;
-}): Promise<void> {
-  const mpinHash = await hashSecret(REVIEW_MPIN);
-
-  const existing = await prisma.user.findFirst({
-    where: { phoneE164: input.phoneE164 },
-    include: { credential: true },
-  });
-
-  if (existing) {
-    await prisma.user.update({
-      where: { id: existing.id },
-      data: {
-        deletedAt: null,
-        status: 'ACTIVE',
-        accountType: input.accountType,
-        fullName: input.fullName,
-      },
-    });
-
-    if (existing.credential) {
-      await prisma.userCredential.update({
-        where: { userId: existing.id },
-        data: { mpinHash, failedAttempts: 0, lockedUntil: null },
-      });
-    } else {
-      await prisma.userCredential.create({ data: { userId: existing.id, mpinHash } });
-    }
-
-    console.info(`[seed] Updated account ${input.phoneE164}`);
-    return;
-  }
-
-  await prisma.user.create({
-    data: {
-      fullName: input.fullName,
-      phoneE164: input.phoneE164,
-      countryCode: 'PK',
-      countryCallingCode: '92',
-      accountType: input.accountType,
-      biometricEnabled: false,
-      isVerified: true,
-      credential: { create: { mpinHash } },
-    },
-  });
-
-  console.info(`[seed] Created account ${input.phoneE164}`);
-}
-
-// Admin accounts are NOT seeded here — this script runs on every deploy
-// (see .github/workflows/deploy.yml), and an admin account with a fixed,
-// script-known phone/MPIN would be a standing backdoor. Provision admins
-// explicitly and by hand with `npm run admin:create` (prisma/create-admin.ts).
-async function seedAccounts(): Promise<void> {
-  await upsertAccount({
-    phoneE164: REVIEW_PHONE,
-    fullName: 'App Review',
-    accountType: AccountType.INDIVIDUAL,
-  });
-}
+// No accounts are seeded here — every account (including App Store/Play
+// review accounts) is provisioned explicitly and by hand with
+// `npm run account:create` (prisma/create-account.ts), never by a script
+// that re-runs on every deploy with a fixed phone/MPIN.
 
 const CATALOG: { category: ListingCategory; name: string; parentName?: string }[] = [
   { category: ListingCategory.equipment, name: 'Excavator' },
@@ -95,12 +32,7 @@ async function seedCatalog(): Promise<void> {
   console.info('[seed] Catalog labels ready');
 }
 
-async function main(): Promise<void> {
-  await seedAccounts();
-  await seedCatalog();
-}
-
-main()
+seedCatalog()
   .catch((error: unknown) => {
     console.error('[seed] Failed', error);
     process.exitCode = 1;

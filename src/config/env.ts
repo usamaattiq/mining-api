@@ -56,15 +56,6 @@ const envSchema = z.object({
   MPIN_LOCKOUT_MINUTES: z.coerce.number().default(15),
   /** Comma-separated E.164 phone numbers exempt from the OTP send-rate-limit (testing/QA). */
   OTP_RATE_LIMIT_EXEMPT_PHONES: z.string().default(''),
-  /**
-   * Comma-separated E.164 numbers that always accept REVIEW_OTP_CODE (App Store / Play review).
-   * WhatsApp is skipped for these numbers.
-   */
-  REVIEW_OTP_PHONES: z.string().default('+923001122334,+923211122334'),
-  REVIEW_OTP_CODE: z
-    .string()
-    .regex(/^\d{6}$/)
-    .default('000000'),
 
   // AWS S3 (uploads)
   AWS_REGION: z.string().min(1, 'AWS_REGION is required'),
