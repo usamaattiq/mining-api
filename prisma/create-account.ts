@@ -77,16 +77,15 @@ async function main(): Promise<void> {
   const mpin = await askMatching('MPIN', /^\d{4}$/, 'must be exactly 4 digits');
   const otp = await askMatching('OTP', /^\d{6}$/, 'must be exactly 6 digits');
 
-  // Never offered/honored for Admin (see the accountType check in
-  // auth.service.ts loginWithMpin) — this is for store-review accounts,
-  // which may be logged into from a fresh device at any time.
-  let loginOtpExempt = false;
-  if (accountType !== AccountType.ADMIN) {
-    const answer = await ask(
-      'Exempt this account from login OTP forever? Only for App Store/Play Store review accounts (y/N): ',
-    );
-    loginOtpExempt = answer.toLowerCase() === 'y';
-  }
+  // For store-review accounts (logged into from an unpredictable fresh
+  // device every time) and, by explicit operator choice, admin accounts that
+  // would otherwise be stuck needing a real OTP after the 30-minute window.
+  // Think twice for ADMIN — this skips login OTP from ANY device, forever.
+  const exemptPrompt =
+    accountType === AccountType.ADMIN
+      ? 'Exempt this ADMIN account from login OTP forever? This skips device verification for an admin — only do this if you understand the risk (y/N): '
+      : 'Exempt this account from login OTP forever? Only for App Store/Play Store review accounts (y/N): ';
+  const loginOtpExempt = (await ask(exemptPrompt)).toLowerCase() === 'y';
 
   const mpinHash = await hashSecret(mpin);
 

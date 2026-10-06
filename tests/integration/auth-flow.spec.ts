@@ -106,7 +106,7 @@ describe('auth flow', () => {
     expect(await userSessionRepository.isActive(payload.jti)).toBe(false);
   });
 
-  it('loginOtpExempt skips the unknown-device OTP from any device, but never for an admin', async () => {
+  it('loginOtpExempt skips the unknown-device OTP from any device, admin included when explicitly flagged', async () => {
     const phone = uniquePhone(randomUUID().replace(/\D/g, '').slice(0, 7));
     await signUp(phone, 'device-EXEMPT01');
     await prisma.user.update({
@@ -138,16 +138,30 @@ describe('auth flow', () => {
     ).rejects.toBeInstanceOf(AppError);
     await authService.verifyLoginOtp({ ...phone, otp: DEV_OTP_CODE, purpose: 'mpin_reset' });
 
+    // An ordinary admin (not flagged exempt) still needs OTP from an
+    // unrecognized device — the default stays safe unless explicitly opted in.
     const adminPhone = uniquePhone(randomUUID().replace(/\D/g, '').slice(0, 7));
-    await signUp(adminPhone, 'device-ADMINEXMPT');
+    await signUp(adminPhone, 'device-ADMINNOTX');
     await prisma.user.update({
       where: { phoneE164: resolvePhoneE164(adminPhone) },
-      data: { loginOtpExempt: true, accountType: AccountType.ADMIN },
+      data: { accountType: AccountType.ADMIN },
     });
-
     await expect(
       authService.loginWithMpin({ ...adminPhone, mpin: '1234', deviceId: 'device-NEVERSEEN2' }),
     ).rejects.toMatchObject({ status: 400 });
+
+    // Explicitly flagging an admin exempt (operator's own informed choice)
+    // does skip it, same as any other account.
+    await prisma.user.update({
+      where: { phoneE164: resolvePhoneE164(adminPhone) },
+      data: { loginOtpExempt: true },
+    });
+    const exemptAdminLogin = await authService.loginWithMpin({
+      ...adminPhone,
+      mpin: '1234',
+      deviceId: 'device-NEVERSEEN2',
+    });
+    expect(exemptAdminLogin.accessToken).toBeTruthy();
   });
 
   it('refresh rotates the token pair and rejects the old refresh token afterward', async () => {

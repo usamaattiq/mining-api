@@ -49,8 +49,9 @@ model User {
   /**
    * Permanently skips the unknown-device login OTP for this account (e.g.
    * App Store/Play Store review accounts, which may be logged into from a
-   * fresh device at any time). Never honored for ADMIN accounts — see
-   * loginWithMpin in auth.service.ts. Set only via prisma/create-account.ts.
+   * fresh device at any time). Can be set on an ADMIN account too, by
+   * explicit operator choice — see isLoginOtpExempt in auth.service.ts.
+   * Set only via prisma/create-account.ts.
    */
   loginOtpExempt     Boolean     @default(false)
   /** RMS / RFQ user id — set when the mining account is linked to RFQ. */

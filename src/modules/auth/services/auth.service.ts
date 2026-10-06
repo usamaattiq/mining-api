@@ -48,14 +48,15 @@ function mapLoginOtpPurpose(purpose: 'login' | 'mpin_reset'): OtpPurpose {
   return purpose === 'mpin_reset' ? OtpPurpose.MPIN_RESET : OtpPurpose.LOGIN;
 }
 
-// Store-review accounts (loginOtpExempt) skip real OTP delivery/verification
-// for LOGIN — never for MPIN_RESET (changing the credential itself stays
-// OTP-gated for everyone) and never for ADMIN accounts.
+// Accounts flagged loginOtpExempt (store-review accounts, and — by explicit
+// operator choice — some admin accounts) skip real OTP delivery/verification
+// for LOGIN. Never for MPIN_RESET — changing the credential itself stays
+// OTP-gated for everyone, exempt or not.
 function isLoginOtpExempt(
   user: { loginOtpExempt: boolean; accountType: AccountType },
   purpose: 'login' | 'mpin_reset',
 ): boolean {
-  return purpose === 'login' && user.loginOtpExempt && user.accountType !== AccountType.ADMIN;
+  return purpose === 'login' && user.loginOtpExempt;
 }
 
 class AuthService {
