@@ -1,6 +1,7 @@
 import { env } from '../../config/env';
 import { AppError } from '../../common/errors/app-error';
 import { ErrorCode } from '../../common/errors/error-codes';
+import { logger } from '../../common/logger';
 
 type WhatsAppErrorBody = {
   error?: {
@@ -67,7 +68,7 @@ class WhatsAppService {
         signal: AbortSignal.timeout(env.WHATSAPP_API_TIMEOUT),
       });
     } catch (error) {
-      console.error('WhatsApp OTP request failed', { error, phoneE164 });
+      logger.error({ err: error, phoneE164 }, 'WhatsApp OTP request failed');
       throw new AppError('Failed to send WhatsApp OTP', 502, ErrorCode.INTERNAL_ERROR);
     }
 
@@ -83,12 +84,10 @@ class WhatsAppService {
         // ignore JSON parse failures; status is enough
       }
 
-      console.error('WhatsApp OTP API rejected request', {
-        status: response.status,
-        providerCode,
-        providerMessage,
-        phoneE164,
-      });
+      logger.error(
+        { status: response.status, providerCode, providerMessage, phoneE164 },
+        'WhatsApp OTP API rejected request',
+      );
 
       throw new AppError(
         'Failed to send WhatsApp OTP',

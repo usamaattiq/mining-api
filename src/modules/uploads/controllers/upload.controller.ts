@@ -6,8 +6,8 @@ import type { PresignUploadInput } from '../validation/upload.schema';
 
 export const uploadController = {
   async createUploadUrl(req: AuthenticatedRequest, res: Response) {
-    const { contentType } = req.validatedBody as PresignUploadInput;
-    const result = await uploadService.createUploadUrl(req.user!.id, contentType);
+    const { contentType, contentLength } = req.validatedBody as PresignUploadInput;
+    const result = await uploadService.createUploadUrl(req.user!.id, contentType, contentLength);
     sendSuccess(res, 201, result);
   },
 };

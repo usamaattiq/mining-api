@@ -73,6 +73,12 @@ const envSchema = z.object({
   AWS_SECRET_ACCESS_KEY: z.string().min(1, 'AWS_SECRET_ACCESS_KEY is required'),
   AWS_S3_PUBLIC_BASE_URL: z.string().url('AWS_S3_PUBLIC_BASE_URL must be a valid URL'),
   S3_PRESIGN_EXPIRES_IN: z.coerce.number().default(300),
+  /** Max object size for a single presigned PUT (bytes). Default 25 MiB. */
+  S3_MAX_UPLOAD_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(25 * 1024 * 1024),
 
   // WhatsApp (OTP delivery)
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),

@@ -10,13 +10,16 @@ function publicUrlFor(key: string): string {
 }
 
 export const uploadService = {
-  async createUploadUrl(userId: string, contentType: AllowedContentType) {
+  async createUploadUrl(userId: string, contentType: AllowedContentType, contentLength: number) {
     const key = `uploads/${userId}/${randomUUID()}.${extensionFor(contentType)}`;
 
+    // ContentLength is included in the SigV4 signature so S3 rejects PUTs whose
+    // actual body size does not match the declared size (cost / DoS guard).
     const command = new PutObjectCommand({
       Bucket: env.AWS_S3_BUCKET,
       Key: key,
       ContentType: contentType,
+      ContentLength: contentLength,
     });
 
     const uploadUrl = await getSignedUrl(s3Client, command, {

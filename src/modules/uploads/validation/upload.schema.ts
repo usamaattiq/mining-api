@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { env } from '../../../config/env';
 
 const ALLOWED_CONTENT_TYPES = {
   'image/jpeg': 'jpg',
@@ -20,6 +21,11 @@ export const presignUploadBodySchema = z.object({
     contentType: z.enum(
       Object.keys(ALLOWED_CONTENT_TYPES) as [AllowedContentType, ...AllowedContentType[]],
     ),
+    contentLength: z
+      .number()
+      .int()
+      .positive()
+      .max(env.S3_MAX_UPLOAD_BYTES, `File exceeds max size of ${env.S3_MAX_UPLOAD_BYTES} bytes`),
   }),
 });
 

@@ -1,3 +1,4 @@
+import { logger } from '../../../common/logger';
 import { auctionClient } from '../../../integrations/auction/auction.client';
 import type { AuctionSnapshot } from '../../../integrations/auction/auction.types';
 import { rfqClient } from '../../../integrations/rfq/rfq.client';
@@ -249,7 +250,7 @@ export async function createListingRfq(
     const updated = await listingRepository.setRfqId(listing.id, snapshot.id);
     return { listing: updated, snapshot };
   } catch (error) {
-    console.error('Failed to create RFQ for listing', { listingId: listing.id, error });
+    logger.error({ err: error, listingId: listing.id }, 'Failed to create RFQ for listing');
     throw error;
   }
 }
@@ -281,10 +282,10 @@ async function createEquipmentAuction(
     const updated = await listingRepository.setRfqId(listing.id, snapshot.id);
     return { listing: updated, snapshot: auctionSnapshotToRfq(snapshot) };
   } catch (error) {
-    console.error('Failed to create auction for equipment listing', {
-      listingId: listing.id,
-      error,
-    });
+    logger.error(
+      { err: error, listingId: listing.id },
+      'Failed to create auction for equipment listing',
+    );
     return { listing };
   }
 }
@@ -319,7 +320,10 @@ async function createGoldAuction(
     const updated = await listingRepository.setRfqId(listing.id, snapshot.id);
     return { listing: updated, snapshot: auctionSnapshotToRfq(snapshot) };
   } catch (error) {
-    console.error('Failed to create auction for gold listing', { listingId: listing.id, error });
+    logger.error(
+      { err: error, listingId: listing.id },
+      'Failed to create auction for gold listing',
+    );
     return { listing };
   }
 }
