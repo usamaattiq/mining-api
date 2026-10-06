@@ -122,6 +122,22 @@ describe('auth flow', () => {
     });
     expect(exemptLogin.accessToken).toBeTruthy();
 
+    // The mobile client always runs phone -> send OTP -> verify OTP before
+    // ever showing the MPIN screen on an unrecognized device. loginWithMpin
+    // being exempt isn't enough on its own — sendLoginOtp/verifyLoginOtp must
+    // also no-op for LOGIN, or the client gets stuck on a real code that was
+    // never actually sent.
+    await authService.sendLoginOtp({ ...phone, purpose: 'login' });
+    await authService.verifyLoginOtp({ ...phone, otp: '111111', purpose: 'login' });
+
+    // MPIN_RESET stays OTP-gated even for an exempt account — changing the
+    // credential itself is a deliberate action, not a routine login.
+    await authService.sendLoginOtp({ ...phone, purpose: 'mpin_reset' });
+    await expect(
+      authService.verifyLoginOtp({ ...phone, otp: '111111', purpose: 'mpin_reset' }),
+    ).rejects.toBeInstanceOf(AppError);
+    await authService.verifyLoginOtp({ ...phone, otp: DEV_OTP_CODE, purpose: 'mpin_reset' });
+
     const adminPhone = uniquePhone(randomUUID().replace(/\D/g, '').slice(0, 7));
     await signUp(adminPhone, 'device-ADMINEXMPT');
     await prisma.user.update({
