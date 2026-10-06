@@ -211,7 +211,7 @@ function listingCreateData(
       category: 'services',
       title: input.title,
       description: input.description,
-      location: input.serviceType === 'online' ? '' : input.location,
+      location: input.location,
       serviceType: input.serviceType,
       serviceCategoryLabel: input.serviceCategoryLabel,
       yearsOfExperience: input.yearsOfExperience,
