@@ -6,10 +6,23 @@ import { ErrorCode } from '../../common/errors/error-codes';
 import { sendSuccess } from '../../common/http/api-response';
 import type { AuthenticatedRequest } from '../../common/http/authenticated-request';
 import { wrap } from '../../common/http/wrap';
+import { validate } from '../../common/validation/validate';
 import { authenticateUser } from '../auth/middleware/authenticate-user';
 import { userSessionRepository } from '../auth/repositories/user-session.repository';
 import { toListingDto } from '../listings/utils/listing.mapper';
 import { requireAdmin } from './require-admin';
+import {
+  createCategoryBodySchema,
+  listingStatusBodySchema,
+  updateCategoryBodySchema,
+  updateUserBodySchema,
+  userStatusBodySchema,
+  type CreateCategoryBody,
+  type ListingStatusBody,
+  type UpdateCategoryBody,
+  type UpdateUserBody,
+  type UserStatusBody,
+} from './validation/admin.schema';
 
 export const adminRouter = Router();
 
@@ -139,7 +152,9 @@ adminRouter.get(
 
 adminRouter.patch(
   '/users/:id',
+  validate(updateUserBodySchema),
   wrap(async (req, res) => {
+    const body = req.validatedBody as UpdateUserBody;
     const user = await prisma.user.findFirst({
       where: {
         id: routeId(req.params.id),
@@ -148,21 +163,16 @@ adminRouter.patch(
       },
     });
     if (!user) throw new AppError('User not found', 404, ErrorCode.USER_NOT_FOUND);
-    const fullName = typeof req.body?.fullName === 'string' ? req.body.fullName.trim() : '';
-    if (!fullName) throw new AppError('Name is required', 400, ErrorCode.VALIDATION_ERROR);
-    const email = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
     const updated = await prisma.user.update({
       where: { id: user.id },
       data: {
-        fullName,
-        email: email || null,
-        address: typeof req.body?.address === 'string' ? req.body.address.trim() || null : null,
+        fullName: body.fullName,
+        email: body.email || null,
+        address: body.address || null,
         companyName:
-          user.accountType === AccountType.COMPANY && typeof req.body?.companyName === 'string'
-            ? req.body.companyName.trim() || null
-            : user.companyName,
-        latitude: typeof req.body?.latitude === 'number' ? req.body.latitude : user.latitude,
-        longitude: typeof req.body?.longitude === 'number' ? req.body.longitude : user.longitude,
+          user.accountType === AccountType.COMPANY ? body.companyName || null : user.companyName,
+        latitude: body.latitude ?? user.latitude,
+        longitude: body.longitude ?? user.longitude,
       },
     });
     sendSuccess(res, 200, { id: updated.id });
@@ -171,11 +181,10 @@ adminRouter.patch(
 
 adminRouter.patch(
   '/users/:id/status',
+  validate(userStatusBodySchema),
   wrap(async (req, res) => {
-    const status = req.body?.status === 'suspended' ? UserStatus.SUSPENDED : UserStatus.ACTIVE;
-    if (req.body?.status !== 'suspended' && req.body?.status !== 'active') {
-      throw new AppError('status must be active or suspended', 400, ErrorCode.VALIDATION_ERROR);
-    }
+    const body = req.validatedBody as UserStatusBody;
+    const status = body.status === 'suspended' ? UserStatus.SUSPENDED : UserStatus.ACTIVE;
     const actorId = (req as AuthenticatedRequest).user?.id;
     if (routeId(req.params.id) === actorId) {
       throw new AppError('You cannot change your own status', 400, ErrorCode.VALIDATION_ERROR);
@@ -243,11 +252,10 @@ adminRouter.get(
 
 adminRouter.patch(
   '/listings/:id/status',
+  validate(listingStatusBodySchema),
   wrap(async (req, res) => {
-    if (req.body?.status !== 'archived' && req.body?.status !== 'active') {
-      throw new AppError('status must be active or archived', 400, ErrorCode.VALIDATION_ERROR);
-    }
-    const status = req.body.status === 'archived' ? ListingStatus.ARCHIVED : ListingStatus.ACTIVE;
+    const body = req.validatedBody as ListingStatusBody;
+    const status = body.status === 'archived' ? ListingStatus.ARCHIVED : ListingStatus.ACTIVE;
     const listing = await prisma.listing.findUnique({ where: { id: routeId(req.params.id) } });
     if (!listing) {
       throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
@@ -313,13 +321,12 @@ adminRouter.get(
 
 adminRouter.post(
   '/categories',
+  validate(createCategoryBodySchema),
   wrap(async (req, res) => {
-    const category = req.body?.category as ListingCategory;
-    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
-    const parentId = typeof req.body?.parentId === 'string' ? req.body.parentId : null;
-    if (!['equipment', 'services', 'gold'].includes(category) || !name) {
-      throw new AppError('Category and name are required', 400, ErrorCode.VALIDATION_ERROR);
-    }
+    const body = req.validatedBody as CreateCategoryBody;
+    const category = body.category as ListingCategory;
+    const name = body.name;
+    const parentId = body.parentId ?? null;
     if (parentId) {
       const parent = await prisma.catalogLabel.findUnique({ where: { id: parentId } });
       if (!parent || parent.category !== category) {
@@ -337,9 +344,10 @@ adminRouter.post(
 
 adminRouter.patch(
   '/categories/:id',
+  validate(updateCategoryBodySchema),
   wrap(async (req, res) => {
-    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
-    if (!name) throw new AppError('Name is required', 400, ErrorCode.VALIDATION_ERROR);
+    const body = req.validatedBody as UpdateCategoryBody;
+    const name = body.name;
     const label = await prisma.catalogLabel.findUnique({ where: { id: routeId(req.params.id) } });
     if (!label) throw new AppError('Category not found', 404, ErrorCode.NOT_FOUND);
     const updated = await prisma.catalogLabel.update({

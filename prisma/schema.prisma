@@ -81,12 +81,15 @@ model UserCredential {
 }
 
 model UserSession {
-  id        String    @id @default(uuid())
-  userId    String
-  deviceId  String
-  jti       String    @unique
-  revokedAt DateTime?
-  createdAt DateTime  @default(now())
+  id                String    @id @default(uuid())
+  userId            String
+  deviceId          String
+  jti               String    @unique
+  /** Opaque refresh-token secret, hashed (see common/security/password.service.ts). */
+  refreshTokenHash  String?
+  refreshExpiresAt  DateTime?
+  revokedAt         DateTime?
+  createdAt         DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

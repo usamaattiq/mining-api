@@ -15,8 +15,30 @@ class UserSessionRepository {
     return Boolean(session);
   }
 
-  create(data: { userId: string; deviceId: string; jti: string }, tx: Tx | typeof prisma = prisma) {
+  create(
+    data: {
+      userId: string;
+      deviceId: string;
+      jti: string;
+      refreshTokenHash?: string;
+      refreshExpiresAt?: Date;
+    },
+    tx: Tx | typeof prisma = prisma,
+  ) {
     return tx.userSession.create({ data });
+  }
+
+  findById(id: string, tx: Tx | typeof prisma = prisma) {
+    return tx.userSession.findUnique({ where: { id } });
+  }
+
+  /** Rotates the access/refresh credentials on an existing session row in place. */
+  rotate(
+    id: string,
+    data: { jti: string; refreshTokenHash: string; refreshExpiresAt: Date },
+    tx: Tx | typeof prisma = prisma,
+  ) {
+    return tx.userSession.update({ where: { id }, data });
   }
 
   revokeAllForUser(userId: string, tx: Tx | typeof prisma = prisma) {

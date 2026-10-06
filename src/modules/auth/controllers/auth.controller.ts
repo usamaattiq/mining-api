@@ -7,6 +7,7 @@ import type {
   LoginMpinBody,
   LoginOtpSendBody,
   LoginOtpVerifyBody,
+  RefreshBody,
   ResetMpinBody,
   SignupEmailCheckBody,
   SignupOtpSendBody,
@@ -84,6 +85,12 @@ class AuthController {
   async logout(req: AuthenticatedRequest, res: Response): Promise<void> {
     await authService.logout(req.sessionJti!);
     sendSuccess(res, 200, { loggedOut: true });
+  }
+
+  async refresh(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const body = req.validatedBody as RefreshBody;
+    const result = await authService.refreshSession(body.refreshToken);
+    sendSuccess(res, 200, result);
   }
 }
 

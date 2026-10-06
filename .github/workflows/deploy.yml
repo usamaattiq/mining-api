@@ -61,3 +61,17 @@ jobs:
             npx prisma db seed
             npm run build
             pm2 restart dahabi-sudan --update-env
+
+            PORT="$(grep -m1 '^PORT=' .env 2>/dev/null | cut -d= -f2)"
+            PORT="${PORT:-4000}"
+            for attempt in $(seq 1 10); do
+              if curl -sf "http://localhost:${PORT}/api/health" > /dev/null; then
+                echo "Health check passed on attempt ${attempt}"
+                exit 0
+              fi
+              echo "Health check attempt ${attempt} failed, retrying…"
+              sleep 3
+            done
+            echo "mining-api did not become healthy after restart" >&2
+            pm2 logs dahabi-sudan --lines 100 --nostream
+            exit 1

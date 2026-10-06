@@ -45,8 +45,10 @@ const envSchema = z.object({
   PUBSUB_EMULATOR_HOST: z.string().optional(),
 
   // Auth
-  JWT_SECRET: z.string().min(16, 'JWT_SECRET is required'),
-  JWT_EXPIRES_IN: z.string().default('30d'),
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
+  /** Access token lifetime — short, because sessions now renew via /auth/refresh. */
+  JWT_EXPIRES_IN: z.string().default('15m'),
+  REFRESH_TOKEN_EXPIRES_IN_DAYS: z.coerce.number().default(30),
   OTP_EXPIRES_MINUTES: z.coerce.number().default(5),
   OTP_REAL_ENABLED: z
     .string()
@@ -56,15 +58,6 @@ const envSchema = z.object({
   MPIN_LOCKOUT_MINUTES: z.coerce.number().default(15),
   /** Comma-separated E.164 phone numbers exempt from the OTP send-rate-limit (testing/QA). */
   OTP_RATE_LIMIT_EXEMPT_PHONES: z.string().default(''),
-  /**
-   * Comma-separated E.164 numbers that always accept REVIEW_OTP_CODE (App Store / Play review).
-   * WhatsApp is skipped for these numbers.
-   */
-  REVIEW_OTP_PHONES: z.string().default('+923001122334,+923211122334'),
-  REVIEW_OTP_CODE: z
-    .string()
-    .regex(/^\d{6}$/)
-    .default('000000'),
 
   // AWS S3 (uploads)
   AWS_REGION: z.string().min(1, 'AWS_REGION is required'),
@@ -96,6 +89,14 @@ const parsed = envSchema.safeParse(process.env);
 if (!parsed.success) {
   console.error('Invalid environment configuration:', parsed.error.flatten().fieldErrors);
   throw new Error('Invalid environment configuration');
+}
+
+// Without this, a prod deploy that forgets OTP_REAL_ENABLED=true silently
+// falls back to a fixed, publicly-known OTP code for every phone number.
+if (parsed.data.NODE_ENV === 'production' && !parsed.data.OTP_REAL_ENABLED) {
+  throw new Error(
+    'OTP_REAL_ENABLED must be true when NODE_ENV=production (the fallback OTP code is not secret)',
+  );
 }
 
 export const env = parsed.data;

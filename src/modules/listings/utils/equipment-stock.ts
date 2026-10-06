@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../../../common/database/prisma';
 import type { EquipmentListingDto, ListingDto, ListingRfqDto } from '../types/listing.types';
 
@@ -19,10 +20,13 @@ export function resolveDealKind(
   return requested === 'sale' ? 'sale' : 'rent';
 }
 
-export async function reservedUnitsByListing(listingIds: string[]): Promise<Map<string, number>> {
+export async function reservedUnitsByListing(
+  listingIds: string[],
+  client: Prisma.TransactionClient = prisma,
+): Promise<Map<string, number>> {
   const map = new Map<string, number>();
   if (listingIds.length === 0) return map;
-  const rows = await prisma.equipmentHold.groupBy({
+  const rows = await client.equipmentHold.groupBy({
     by: ['listingId'],
     where: { listingId: { in: listingIds }, status: { in: [...RESERVED] } },
     _sum: { units: true },
@@ -33,8 +37,18 @@ export async function reservedUnitsByListing(listingIds: string[]): Promise<Map<
   return map;
 }
 
-export async function availableUnitsFor(listingId: string, totalUnits: number): Promise<number> {
-  const reserved = await reservedUnitsByListing([listingId]);
+/**
+ * client defaults to the global prisma singleton, but pass the active
+ * `tx` when this check must be atomic with the write that follows it
+ * (see runSerializable in common/database/transaction.ts) — otherwise two
+ * concurrent requests can both read "units available" before either writes.
+ */
+export async function availableUnitsFor(
+  listingId: string,
+  totalUnits: number,
+  client: Prisma.TransactionClient = prisma,
+): Promise<number> {
+  const reserved = await reservedUnitsByListing([listingId], client);
   return Math.max(0, totalUnits - (reserved.get(listingId) ?? 0));
 }
 
