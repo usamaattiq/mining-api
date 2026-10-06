@@ -45,7 +45,7 @@ const envSchema = z.object({
   PUBSUB_EMULATOR_HOST: z.string().optional(),
 
   // Auth
-  JWT_SECRET: z.string().min(16, 'JWT_SECRET is required'),
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   JWT_EXPIRES_IN: z.string().default('30d'),
   OTP_EXPIRES_MINUTES: z.coerce.number().default(5),
   OTP_REAL_ENABLED: z
@@ -90,6 +90,14 @@ const parsed = envSchema.safeParse(process.env);
 if (!parsed.success) {
   console.error('Invalid environment configuration:', parsed.error.flatten().fieldErrors);
   throw new Error('Invalid environment configuration');
+}
+
+// Without this, a prod deploy that forgets OTP_REAL_ENABLED=true silently
+// falls back to a fixed, publicly-known OTP code for every phone number.
+if (parsed.data.NODE_ENV === 'production' && !parsed.data.OTP_REAL_ENABLED) {
+  throw new Error(
+    'OTP_REAL_ENABLED must be true when NODE_ENV=production (the fallback OTP code is not secret)',
+  );
 }
 
 export const env = parsed.data;

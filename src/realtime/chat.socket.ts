@@ -1,14 +1,11 @@
 import type { Server as HttpServer } from 'http';
 import { Server, type Socket } from 'socket.io';
-import pino from 'pino';
+import { env } from '../config/env';
+import { logger } from '../common/logger';
 import { verifyUserAccessToken } from '../modules/auth/security/user-jwt.service';
 import { userSessionRepository } from '../modules/auth/repositories/user-session.repository';
 import { conversationRepository } from '../modules/messages/repositories/conversation.repository';
 import { setChatSocketServer } from './chat.emitter';
-
-const logger = pino({
-  transport: process.env.NODE_ENV !== 'production' ? { target: 'pino-pretty' } : undefined,
-});
 
 type AuthedSocket = Socket & {
   data: {
@@ -55,7 +52,9 @@ export function initChatSocket(httpServer: HttpServer): Server {
   const chatIo = new Server(httpServer, {
     path: '/socket.io',
     cors: {
-      origin: true,
+      // Same allowlist as the REST API (main.ts) — was `origin: true`
+      // (wide open) regardless of CORS_ORIGINS.
+      origin: env.CORS_ORIGINS?.split(',').map((origin) => origin.trim()),
       credentials: true,
     },
   });

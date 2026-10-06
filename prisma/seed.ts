@@ -3,7 +3,6 @@ import { prisma } from '../src/common/database/prisma';
 import { hashSecret } from '../src/common/security/password.service';
 
 const REVIEW_PHONE = '+923001122334';
-const ADMIN_PHONE = '+923211122334';
 const REVIEW_MPIN = '0000';
 
 async function upsertAccount(input: {
@@ -58,16 +57,15 @@ async function upsertAccount(input: {
   console.info(`[seed] Created account ${input.phoneE164}`);
 }
 
+// Admin accounts are NOT seeded here — this script runs on every deploy
+// (see .github/workflows/deploy.yml), and an admin account with a fixed,
+// script-known phone/MPIN would be a standing backdoor. Provision admins
+// explicitly and by hand with `npm run admin:create` (prisma/create-admin.ts).
 async function seedAccounts(): Promise<void> {
   await upsertAccount({
     phoneE164: REVIEW_PHONE,
     fullName: 'App Review',
     accountType: AccountType.INDIVIDUAL,
-  });
-  await upsertAccount({
-    phoneE164: ADMIN_PHONE,
-    fullName: 'Admin',
-    accountType: AccountType.ADMIN,
   });
 }
 

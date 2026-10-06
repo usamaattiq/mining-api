@@ -1,6 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../../common/database/prisma';
-import { runInTransaction } from '../../../common/database/transaction';
+import { runInTransaction, runSerializable } from '../../../common/database/transaction';
 import { AppError } from '../../../common/errors/app-error';
 import { ErrorCode } from '../../../common/errors/error-codes';
 import { auctionClient } from '../../../integrations/auction/auction.client';
@@ -829,32 +829,34 @@ class ListingService {
     if (!listing || listing.status !== 'ACTIVE' || !isSupplierEquipment(listing)) {
       throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
     }
-    const hold = await prisma.equipmentHold.findFirst({
-      where: { offerId, listingId: listing.id },
-    });
-    if (!hold || hold.buyerId !== viewerId) {
-      throw new AppError('Offer not found', 404, ErrorCode.NOT_FOUND);
-    }
-    if (hold.status !== 'pending') {
-      throw new AppError('This offer can no longer be updated', 400, ErrorCode.VALIDATION_ERROR);
-    }
-    const totalUnits = Math.max(listing.units ?? 1, 1);
-    const available = await availableUnitsFor(listing.id, totalUnits);
-    const units = Math.max(input.units, 1);
-    if (available < 1 || units > available) {
-      throw new AppError(
-        available < 1
-          ? 'No units left on this listing'
-          : `Only ${available} units are still available`,
-        400,
-        ErrorCode.VALIDATION_ERROR,
-      );
-    }
-    const unitPrice = Number(input.price);
-    const totalPrice = Math.round(unitPrice * units * 100) / 100;
-    await prisma.equipmentHold.update({
-      where: { id: hold.id },
-      data: { units, price: String(totalPrice) },
+    await runSerializable(async (tx) => {
+      const hold = await tx.equipmentHold.findFirst({
+        where: { offerId, listingId: listing.id },
+      });
+      if (!hold || hold.buyerId !== viewerId) {
+        throw new AppError('Offer not found', 404, ErrorCode.NOT_FOUND);
+      }
+      if (hold.status !== 'pending') {
+        throw new AppError('This offer can no longer be updated', 400, ErrorCode.VALIDATION_ERROR);
+      }
+      const totalUnits = Math.max(listing.units ?? 1, 1);
+      const available = await availableUnitsFor(listing.id, totalUnits, tx);
+      const units = Math.max(input.units, 1);
+      if (available < 1 || units > available) {
+        throw new AppError(
+          available < 1
+            ? 'No units left on this listing'
+            : `Only ${available} units are still available`,
+          400,
+          ErrorCode.VALIDATION_ERROR,
+        );
+      }
+      const unitPrice = Number(input.price);
+      const totalPrice = Math.round(unitPrice * units * 100) / 100;
+      await tx.equipmentHold.update({
+        where: { id: hold.id },
+        data: { units, price: String(totalPrice) },
+      });
     });
     return this.getById(listing.id, viewerId);
   }
@@ -874,47 +876,49 @@ class ListingService {
     ) {
       throw new AppError('Choose rent or sale for this offer', 400, ErrorCode.VALIDATION_ERROR);
     }
-    const totalUnits = Math.max(listing.units ?? 1, 1);
-    const available = await availableUnitsFor(listing.id, totalUnits);
-    const units = Math.max(input.units ?? 1, 1);
-    if (available < 1 || units > available) {
-      throw new AppError(
-        available < 1
-          ? 'No units left on this listing'
-          : `Only ${available} units are still available`,
-        400,
-        ErrorCode.VALIDATION_ERROR,
-      );
-    }
     const kind = resolveDealKind(listing.equipmentMode, input.fulfillment);
-    const openSameKind = await prisma.equipmentHold.findFirst({
-      where: {
-        listingId: listing.id,
-        buyerId: viewerId,
-        kind,
-        status: { in: ['pending', 'selected'] },
-      },
-    });
-    if (openSameKind) {
-      throw new AppError(
-        'You already have an open offer of this type',
-        400,
-        ErrorCode.VALIDATION_ERROR,
-      );
-    }
-    const unitPrice = Number(input.price);
-    const totalPrice = Math.round(unitPrice * units * 100) / 100;
     const offerId = crypto.randomUUID();
-    await prisma.equipmentHold.create({
-      data: {
-        listingId: listing.id,
-        offerId,
-        buyerId: viewerId,
-        kind,
-        units,
-        price: String(totalPrice),
-        status: 'pending',
-      },
+    await runSerializable(async (tx) => {
+      const totalUnits = Math.max(listing.units ?? 1, 1);
+      const available = await availableUnitsFor(listing.id, totalUnits, tx);
+      const units = Math.max(input.units ?? 1, 1);
+      if (available < 1 || units > available) {
+        throw new AppError(
+          available < 1
+            ? 'No units left on this listing'
+            : `Only ${available} units are still available`,
+          400,
+          ErrorCode.VALIDATION_ERROR,
+        );
+      }
+      const openSameKind = await tx.equipmentHold.findFirst({
+        where: {
+          listingId: listing.id,
+          buyerId: viewerId,
+          kind,
+          status: { in: ['pending', 'selected'] },
+        },
+      });
+      if (openSameKind) {
+        throw new AppError(
+          'You already have an open offer of this type',
+          400,
+          ErrorCode.VALIDATION_ERROR,
+        );
+      }
+      const unitPrice = Number(input.price);
+      const totalPrice = Math.round(unitPrice * units * 100) / 100;
+      await tx.equipmentHold.create({
+        data: {
+          listingId: listing.id,
+          offerId,
+          buyerId: viewerId,
+          kind,
+          units,
+          price: String(totalPrice),
+          status: 'pending',
+        },
+      });
     });
     notifyListingRfq(
       listing.ownerId,
@@ -932,32 +936,55 @@ class ListingService {
     offerId: string,
     action: 'select' | 'reject' | 'confirm' | 'decline' | 'withdraw',
   ): Promise<ListingDto> {
-    const hold = await prisma.equipmentHold.findFirst({
-      where: { offerId, listingId: listing.id },
+    const hold = await runSerializable(async (tx) => {
+      const hold = await tx.equipmentHold.findFirst({
+        where: { offerId, listingId: listing.id },
+      });
+      if (!hold) {
+        throw new AppError('Offer not found', 404, ErrorCode.NOT_FOUND);
+      }
+      const ownerAction = action === 'select' || action === 'reject';
+      if (ownerAction && listing.ownerId !== viewerId) {
+        throw new AppError('Only the listing owner can decide offers', 403, ErrorCode.FORBIDDEN);
+      }
+      if (!ownerAction && hold.buyerId !== viewerId) {
+        throw new AppError('Only the buyer can update this offer', 403, ErrorCode.FORBIDDEN);
+      }
+      if (action === 'select') {
+        if (hold.status !== 'pending') {
+          throw new AppError(
+            'This offer can no longer be accepted',
+            400,
+            ErrorCode.VALIDATION_ERROR,
+          );
+        }
+        const available = await availableUnitsFor(listing.id, Math.max(listing.units ?? 1, 1), tx);
+        if (available < 1 || hold.units > available) {
+          throw new AppError(
+            available < 1 ? 'No units available' : 'Less units available',
+            400,
+            ErrorCode.VALIDATION_ERROR,
+          );
+        }
+        await tx.equipmentHold.update({ where: { id: hold.id }, data: { status: 'selected' } });
+      } else if (action === 'reject' && hold.status === 'pending') {
+        await tx.equipmentHold.update({ where: { id: hold.id }, data: { status: 'rejected' } });
+      } else if (action === 'confirm' && hold.status === 'selected') {
+        await tx.equipmentHold.update({ where: { id: hold.id }, data: { status: 'active' } });
+      } else if (action === 'decline' && hold.status === 'selected') {
+        await tx.equipmentHold.update({ where: { id: hold.id }, data: { status: 'declined' } });
+      } else if (action === 'withdraw' && hold.status === 'pending') {
+        await tx.equipmentHold.update({ where: { id: hold.id }, data: { status: 'withdrawn' } });
+      } else {
+        throw new AppError('This offer can no longer be updated', 400, ErrorCode.VALIDATION_ERROR);
+      }
+      return hold;
     });
-    if (!hold) {
-      throw new AppError('Offer not found', 404, ErrorCode.NOT_FOUND);
-    }
-    const ownerAction = action === 'select' || action === 'reject';
-    if (ownerAction && listing.ownerId !== viewerId) {
-      throw new AppError('Only the listing owner can decide offers', 403, ErrorCode.FORBIDDEN);
-    }
-    if (!ownerAction && hold.buyerId !== viewerId) {
-      throw new AppError('Only the buyer can update this offer', 403, ErrorCode.FORBIDDEN);
-    }
+
+    // hold.status below is the pre-update snapshot — same values the
+    // original code branched on, since notifications are a side effect of
+    // which branch ran, not of the row's state after the write.
     if (action === 'select') {
-      if (hold.status !== 'pending') {
-        throw new AppError('This offer can no longer be accepted', 400, ErrorCode.VALIDATION_ERROR);
-      }
-      const available = await availableUnitsFor(listing.id, Math.max(listing.units ?? 1, 1));
-      if (available < 1 || hold.units > available) {
-        throw new AppError(
-          available < 1 ? 'No units available' : 'Less units available',
-          400,
-          ErrorCode.VALIDATION_ERROR,
-        );
-      }
-      await prisma.equipmentHold.update({ where: { id: hold.id }, data: { status: 'selected' } });
       notifyListingRfq(
         hold.buyerId,
         'Offer accepted',
@@ -966,7 +993,6 @@ class ListingService {
         `equipment-select:${hold.id}`,
       );
     } else if (action === 'reject' && hold.status === 'pending') {
-      await prisma.equipmentHold.update({ where: { id: hold.id }, data: { status: 'rejected' } });
       notifyListingRfq(
         hold.buyerId,
         'Offer declined',
@@ -975,7 +1001,6 @@ class ListingService {
         `equipment-reject:${hold.id}`,
       );
     } else if (action === 'confirm' && hold.status === 'selected') {
-      await prisma.equipmentHold.update({ where: { id: hold.id }, data: { status: 'active' } });
       notifyListingRfq(
         listing.ownerId,
         'Offer confirmed',
@@ -983,12 +1008,6 @@ class ListingService {
         listing,
         `equipment-confirm:${hold.id}`,
       );
-    } else if (action === 'decline' && hold.status === 'selected') {
-      await prisma.equipmentHold.update({ where: { id: hold.id }, data: { status: 'declined' } });
-    } else if (action === 'withdraw' && hold.status === 'pending') {
-      await prisma.equipmentHold.update({ where: { id: hold.id }, data: { status: 'withdrawn' } });
-    } else {
-      throw new AppError('This offer can no longer be updated', 400, ErrorCode.VALIDATION_ERROR);
     }
     return this.getById(listing.id, viewerId);
   }

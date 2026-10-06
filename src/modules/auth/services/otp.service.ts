@@ -69,7 +69,12 @@ class OtpService {
 
     if (isReviewOtpPhone(phoneE164) || !env.OTP_REAL_ENABLED) {
       // Review / local: do not send WhatsApp. Reviewers use the fixed code.
-      console.info(`[otp] ${purpose} code for ${phoneE164}: ${code}`);
+      // env.ts refuses to boot in production unless OTP_REAL_ENABLED=true,
+      // so the !OTP_REAL_ENABLED branch only reaches here in dev/test —
+      // this check is defense in depth, not the primary guard.
+      if (env.NODE_ENV !== 'production') {
+        console.info(`[otp] ${purpose} code for ${phoneE164}: ${code}`);
+      }
       return;
     }
 
