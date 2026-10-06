@@ -8,8 +8,32 @@ jobs:
   verify:
     name: Lint and test
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mining
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/mining?schema=public
+      # Dummy but schema-valid values — the integration tests never call
+      # AWS/Ping for real, they just need config/env.ts to parse.
+      JWT_SECRET: ci-only-placeholder-secret-32-characters-min
+      PING_BASE_URL: http://localhost:3000/api/v1
+      PING_API_KEY: ci-placeholder
+      AWS_REGION: eu-north-1
+      AWS_S3_BUCKET: ci-placeholder-bucket
+      AWS_ACCESS_KEY_ID: ci-placeholder
+      AWS_SECRET_ACCESS_KEY: ci-placeholder
+      AWS_S3_PUBLIC_BASE_URL: https://ci-placeholder-bucket.s3.eu-north-1.amazonaws.com
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -34,6 +58,9 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Run database migrations
+        run: npx prisma migrate deploy
 
       - name: Test
         run: npm test -- --passWithNoTests
