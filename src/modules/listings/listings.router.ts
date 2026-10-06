@@ -15,6 +15,7 @@ import {
   submitListingOfferBodySchema,
   updateEquipmentUnitsSchema,
   updateListingOfferSchema,
+  updateListingSchema,
 } from './validation/listing.schema';
 
 export const listingsRouter = Router();
@@ -127,6 +128,12 @@ listingsRouter.post(
   '/:id/stock/:holdId/return',
   validate(equipmentStockReturnParamsSchema),
   wrap((req, res) => listingController.returnRentedUnits(req, res)),
+);
+
+listingsRouter.patch(
+  '/:id',
+  validate(updateListingSchema),
+  wrap((req, res) => listingController.update(req, res)),
 );
 
 listingsRouter.delete(

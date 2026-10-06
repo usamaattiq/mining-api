@@ -37,6 +37,24 @@ class ListingRepository {
     });
   }
 
+  updateContent(
+    id: string,
+    data: Prisma.ListingUpdateInput,
+    media: Prisma.ListingMediaCreateWithoutListingInput[],
+  ): Promise<ListingWithMedia> {
+    return prisma.$transaction(async (tx) => {
+      await tx.listingMedia.deleteMany({ where: { listingId: id } });
+      return tx.listing.update({
+        where: { id },
+        data: {
+          ...data,
+          media: { create: media },
+        },
+        include: listingInclude,
+      });
+    });
+  }
+
   setRfqId(id: string, rfqId: string, tx: Tx | typeof prisma = prisma): Promise<ListingWithMedia> {
     return tx.listing.update({
       where: { id },
