@@ -123,7 +123,10 @@ adminRouter.get(
     const listings = await prisma.listing.findMany({
       where: { ownerId: user.id, status: ListingStatus.ACTIVE },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, title: true, reference: true, category: true, status: true },
+      include: {
+        media: { orderBy: { sortOrder: 'asc' } },
+        owner: { select: { id: true, fullName: true, avatarUrl: true } },
+      },
     });
     sendSuccess(res, 200, {
       id: user.id,
@@ -142,10 +145,7 @@ adminRouter.get(
             : 'individual',
       companyName: user.companyName,
       status: user.status === UserStatus.SUSPENDED ? 'suspended' : 'active',
-      listings: listings.map((listing) => ({
-        ...listing,
-        status: listing.status === ListingStatus.ARCHIVED ? 'archived' : 'active',
-      })),
+      listings: listings.map(toListingDto),
     });
   }),
 );
