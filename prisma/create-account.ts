@@ -77,6 +77,16 @@ async function main(): Promise<void> {
   const mpin = await askMatching('MPIN', /^\d{4}$/, 'must be exactly 4 digits');
   const otp = await askMatching('OTP', /^\d{6}$/, 'must be exactly 6 digits');
 
+  // For store-review accounts (logged into from an unpredictable fresh
+  // device every time) and, by explicit operator choice, admin accounts that
+  // would otherwise be stuck needing a real OTP after the 30-minute window.
+  // Think twice for ADMIN — this skips login OTP from ANY device, forever.
+  const exemptPrompt =
+    accountType === AccountType.ADMIN
+      ? 'Exempt this ADMIN account from login OTP forever? This skips device verification for an admin — only do this if you understand the risk (y/N): '
+      : 'Exempt this account from login OTP forever? Only for App Store/Play Store review accounts (y/N): ';
+  const loginOtpExempt = (await ask(exemptPrompt)).toLowerCase() === 'y';
+
   const mpinHash = await hashSecret(mpin);
 
   const user = await prisma.user.create({
@@ -88,6 +98,7 @@ async function main(): Promise<void> {
       accountType,
       biometricEnabled: false,
       isVerified: true,
+      loginOtpExempt,
       credential: { create: { mpinHash } },
     },
   });
@@ -103,7 +114,9 @@ async function main(): Promise<void> {
 
   console.info(
     `[account:create] Created ${accountType} ${user.id} (${phoneE164}) — ` +
-      'login works for the next 30 minutes without a real OTP.',
+      (loginOtpExempt
+        ? 'login never requires OTP for this account, from any device.'
+        : 'login works for the next 30 minutes without a real OTP (any device after that needs a real one).'),
   );
 }
 

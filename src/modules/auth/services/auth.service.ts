@@ -48,6 +48,17 @@ function mapLoginOtpPurpose(purpose: 'login' | 'mpin_reset'): OtpPurpose {
   return purpose === 'mpin_reset' ? OtpPurpose.MPIN_RESET : OtpPurpose.LOGIN;
 }
 
+// Accounts flagged loginOtpExempt (store-review accounts, and — by explicit
+// operator choice — some admin accounts) skip real OTP delivery/verification
+// for LOGIN. Never for MPIN_RESET — changing the credential itself stays
+// OTP-gated for everyone, exempt or not.
+function isLoginOtpExempt(
+  user: { loginOtpExempt: boolean; accountType: AccountType },
+  purpose: 'login' | 'mpin_reset',
+): boolean {
+  return purpose === 'login' && user.loginOtpExempt;
+}
+
 class AuthService {
   async sendSignupOtp(input: SignupOtpSendBody): Promise<void> {
     const phoneE164 = resolvePhoneE164(input);
@@ -143,11 +154,16 @@ class AuthService {
     }
 
     this.assertCanAuthenticate(existing.status);
+    if (isLoginOtpExempt(existing, input.purpose)) return;
+
     await otpService.sendOtp(phoneE164, mapLoginOtpPurpose(input.purpose));
   }
 
   async verifyLoginOtp(input: LoginOtpVerifyBody): Promise<void> {
     const phoneE164 = resolvePhoneE164(input);
+    const existing = await userRepository.findByPhoneE164(phoneE164);
+    if (existing && isLoginOtpExempt(existing, input.purpose)) return;
+
     await otpService.verifyOtp(phoneE164, mapLoginOtpPurpose(input.purpose), input.otp);
   }
 
@@ -169,7 +185,7 @@ class AuthService {
       user.id,
       input.deviceId,
     );
-    if (!isKnownDevice) {
+    if (!isKnownDevice && !isLoginOtpExempt(user, 'login')) {
       await otpService.assertPhoneVerified(phoneE164, OtpPurpose.LOGIN);
     }
 

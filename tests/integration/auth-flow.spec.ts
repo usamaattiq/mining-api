@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
+import { AccountType } from '@prisma/client';
 import { prisma } from '../../src/common/database/prisma';
 import { authService } from '../../src/modules/auth/services/auth.service';
 import { verifyUserAccessToken } from '../../src/modules/auth/security/user-jwt.service';
 import { userSessionRepository } from '../../src/modules/auth/repositories/user-session.repository';
+import { resolvePhoneE164 } from '../../src/modules/auth/utils/resolve-phone';
 import { AppError } from '../../src/common/errors/app-error';
 import { ErrorCode } from '../../src/common/errors/error-codes';
 
@@ -102,6 +104,64 @@ describe('auth flow', () => {
     await authService.logout(payload.jti);
 
     expect(await userSessionRepository.isActive(payload.jti)).toBe(false);
+  });
+
+  it('loginOtpExempt skips the unknown-device OTP from any device, admin included when explicitly flagged', async () => {
+    const phone = uniquePhone(randomUUID().replace(/\D/g, '').slice(0, 7));
+    await signUp(phone, 'device-EXEMPT01');
+    await prisma.user.update({
+      where: { phoneE164: resolvePhoneE164(phone) },
+      data: { loginOtpExempt: true },
+    });
+
+    // Brand-new device, no OTP sent/verified at all — still succeeds.
+    const exemptLogin = await authService.loginWithMpin({
+      ...phone,
+      mpin: '1234',
+      deviceId: 'device-NEVERSEEN',
+    });
+    expect(exemptLogin.accessToken).toBeTruthy();
+
+    // The mobile client always runs phone -> send OTP -> verify OTP before
+    // ever showing the MPIN screen on an unrecognized device. loginWithMpin
+    // being exempt isn't enough on its own — sendLoginOtp/verifyLoginOtp must
+    // also no-op for LOGIN, or the client gets stuck on a real code that was
+    // never actually sent.
+    await authService.sendLoginOtp({ ...phone, purpose: 'login' });
+    await authService.verifyLoginOtp({ ...phone, otp: '111111', purpose: 'login' });
+
+    // MPIN_RESET stays OTP-gated even for an exempt account — changing the
+    // credential itself is a deliberate action, not a routine login.
+    await authService.sendLoginOtp({ ...phone, purpose: 'mpin_reset' });
+    await expect(
+      authService.verifyLoginOtp({ ...phone, otp: '111111', purpose: 'mpin_reset' }),
+    ).rejects.toBeInstanceOf(AppError);
+    await authService.verifyLoginOtp({ ...phone, otp: DEV_OTP_CODE, purpose: 'mpin_reset' });
+
+    // An ordinary admin (not flagged exempt) still needs OTP from an
+    // unrecognized device — the default stays safe unless explicitly opted in.
+    const adminPhone = uniquePhone(randomUUID().replace(/\D/g, '').slice(0, 7));
+    await signUp(adminPhone, 'device-ADMINNOTX');
+    await prisma.user.update({
+      where: { phoneE164: resolvePhoneE164(adminPhone) },
+      data: { accountType: AccountType.ADMIN },
+    });
+    await expect(
+      authService.loginWithMpin({ ...adminPhone, mpin: '1234', deviceId: 'device-NEVERSEEN2' }),
+    ).rejects.toMatchObject({ status: 400 });
+
+    // Explicitly flagging an admin exempt (operator's own informed choice)
+    // does skip it, same as any other account.
+    await prisma.user.update({
+      where: { phoneE164: resolvePhoneE164(adminPhone) },
+      data: { loginOtpExempt: true },
+    });
+    const exemptAdminLogin = await authService.loginWithMpin({
+      ...adminPhone,
+      mpin: '1234',
+      deviceId: 'device-NEVERSEEN2',
+    });
+    expect(exemptAdminLogin.accessToken).toBeTruthy();
   });
 
   it('refresh rotates the token pair and rejects the old refresh token afterward', async () => {
