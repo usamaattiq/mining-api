@@ -747,7 +747,7 @@ class ListingService {
     const listing = await requireSupplierEquipment(listingId, viewerId, { allowAdmin: true });
     const holds = await prisma.equipmentHold.findMany({
       where: { listingId, status: { in: ['selected', 'active', 'returned'] } },
-      include: { buyer: { select: { id: true, fullName: true } } },
+      include: { buyer: { select: { id: true, fullName: true, phoneE164: true } } },
       orderBy: { createdAt: 'desc' },
     });
     const active = holds.filter((hold) => hold.status === 'active' || hold.status === 'selected');
@@ -769,6 +769,7 @@ class ListingService {
         status: hold.status,
         buyerId: hold.buyer.id,
         buyerName: hold.buyer.fullName,
+        buyerPhone: hold.buyer.phoneE164,
         price: hold.price,
         createdAt: hold.createdAt.getTime(),
       })),
