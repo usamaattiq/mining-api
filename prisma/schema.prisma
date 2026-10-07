@@ -245,6 +245,7 @@ model CatalogLabel {
   id        String          @id @default(uuid())
   category  ListingCategory
   name      String
+  nameAr    String?
   parentId  String?
   parent    CatalogLabel?   @relation("CatalogTree", fields: [parentId], references: [id])
   children  CatalogLabel[]  @relation("CatalogTree")

@@ -55,7 +55,7 @@ listingsRouter.get(
     const rows = await prisma.catalogLabel.findMany({
       where: { category },
       orderBy: { name: 'asc' },
-      select: { id: true, name: true, parentId: true },
+      select: { id: true, name: true, nameAr: true, parentId: true },
     });
     sendSuccess(res, 200, {
       names: rows.map((row) => row.name),

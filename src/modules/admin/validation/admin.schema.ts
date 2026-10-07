@@ -27,13 +27,15 @@ export const createCategoryBodySchema = z.object({
   body: z.object({
     category: z.enum(['equipment', 'services', 'gold']),
     name: z.string().trim().min(1).max(150),
-    parentId: z.string().trim().min(1).max(64).optional(),
+    nameAr: z.string().trim().min(1).max(150),
+    parentId: z.string().trim().min(1).max(64).nullish(),
   }),
 });
 
 export const updateCategoryBodySchema = z.object({
   body: z.object({
     name: z.string().trim().min(1).max(150),
+    nameAr: z.string().trim().min(1).max(150),
   }),
 });
 

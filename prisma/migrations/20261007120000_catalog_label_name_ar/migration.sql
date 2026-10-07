@@ -1,0 +1,1 @@
+ALTER TABLE "catalog_labels" ADD COLUMN IF NOT EXISTS "nameAr" TEXT;

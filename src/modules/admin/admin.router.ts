@@ -309,6 +309,7 @@ adminRouter.get(
           labels: labels.map((label) => ({
             id: label.id,
             name: label.name,
+            nameAr: label.nameAr,
             parentId: label.parentId,
             count: counts.get(label.name) ?? 0,
           })),
@@ -326,6 +327,7 @@ adminRouter.post(
     const body = req.validatedBody as CreateCategoryBody;
     const category = body.category as ListingCategory;
     const name = body.name;
+    const nameAr = body.nameAr;
     const parentId = body.parentId ?? null;
     if (parentId) {
       const parent = await prisma.catalogLabel.findUnique({ where: { id: parentId } });
@@ -335,10 +337,10 @@ adminRouter.post(
     }
     const created = await prisma.catalogLabel.upsert({
       where: { category_name: { category, name } },
-      update: {},
-      create: { category, name, parentId },
+      update: { nameAr },
+      create: { category, name, nameAr, parentId },
     });
-    sendSuccess(res, 201, { id: created.id, name: created.name });
+    sendSuccess(res, 201, { id: created.id, name: created.name, nameAr: created.nameAr });
   }),
 );
 
@@ -348,13 +350,14 @@ adminRouter.patch(
   wrap(async (req, res) => {
     const body = req.validatedBody as UpdateCategoryBody;
     const name = body.name;
+    const nameAr = body.nameAr;
     const label = await prisma.catalogLabel.findUnique({ where: { id: routeId(req.params.id) } });
     if (!label) throw new AppError('Category not found', 404, ErrorCode.NOT_FOUND);
     const updated = await prisma.catalogLabel.update({
       where: { id: label.id },
-      data: { name },
+      data: { name, nameAr },
     });
-    sendSuccess(res, 200, { id: updated.id, name: updated.name });
+    sendSuccess(res, 200, { id: updated.id, name: updated.name, nameAr: updated.nameAr });
   }),
 );
 
