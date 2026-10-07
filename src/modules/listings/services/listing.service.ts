@@ -744,7 +744,7 @@ class ListingService {
   }
 
   async listEquipmentStock(listingId: string, viewerId: string) {
-    const listing = await requireSupplierEquipment(listingId, viewerId);
+    const listing = await requireSupplierEquipment(listingId, viewerId, { allowAdmin: true });
     const holds = await prisma.equipmentHold.findMany({
       where: { listingId, status: { in: ['selected', 'active', 'returned'] } },
       include: { buyer: { select: { id: true, fullName: true } } },
@@ -1013,12 +1013,23 @@ class ListingService {
   }
 }
 
-async function requireSupplierEquipment(listingId: string, viewerId: string) {
+async function requireSupplierEquipment(
+  listingId: string,
+  viewerId: string,
+  options?: { allowAdmin?: boolean },
+) {
   const listing = await listingRepository.findById(listingId);
   if (!listing || listing.status !== 'ACTIVE' || !isSupplierEquipment(listing)) {
     throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
   }
   if (listing.ownerId !== viewerId) {
+    if (options?.allowAdmin) {
+      const viewer = await prisma.user.findUnique({
+        where: { id: viewerId },
+        select: { accountType: true },
+      });
+      if (viewer?.accountType === 'ADMIN') return listing;
+    }
     throw new AppError('Only the listing owner can manage units', 403, ErrorCode.FORBIDDEN);
   }
   return listing;
