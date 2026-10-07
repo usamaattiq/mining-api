@@ -10,6 +10,7 @@ import { validate } from '../../common/validation/validate';
 import { authenticateUser } from '../auth/middleware/authenticate-user';
 import { userSessionRepository } from '../auth/repositories/user-session.repository';
 import { toListingDto } from '../listings/utils/listing.mapper';
+import { attachRfqStatuses } from '../listings/utils/listing-rfq';
 import { requireAdmin } from './require-admin';
 import {
   createCategoryBodySchema,
@@ -128,6 +129,7 @@ adminRouter.get(
         owner: { select: { id: true, fullName: true, avatarUrl: true } },
       },
     });
+    const listingDtos = await attachRfqStatuses(listings.map(toListingDto), listings, user.id);
     sendSuccess(res, 200, {
       id: user.id,
       fullName: user.fullName,
@@ -145,7 +147,7 @@ adminRouter.get(
             : 'individual',
       companyName: user.companyName,
       status: user.status === UserStatus.SUSPENDED ? 'suspended' : 'active',
-      listings: listings.map(toListingDto),
+      listings: listingDtos,
     });
   }),
 );
@@ -246,7 +248,22 @@ adminRouter.get(
         owner: { select: { id: true, fullName: true, avatarUrl: true } },
       },
     });
-    sendSuccess(res, 200, { items: rows.map(toListingDto) });
+    const dtos = rows.map(toListingDto);
+    const byOwner = new Map<string, { dtos: typeof dtos; rows: typeof rows }>();
+    rows.forEach((row, index) => {
+      const bucket = byOwner.get(row.ownerId) ?? { dtos: [], rows: [] };
+      bucket.dtos.push(dtos[index]!);
+      bucket.rows.push(row);
+      byOwner.set(row.ownerId, bucket);
+    });
+    const withStatus = new Map<string, (typeof dtos)[number]>();
+    await Promise.all(
+      [...byOwner.entries()].map(async ([ownerId, bucket]) => {
+        const attached = await attachRfqStatuses(bucket.dtos, bucket.rows, ownerId);
+        for (const item of attached) withStatus.set(item.id, item);
+      }),
+    );
+    sendSuccess(res, 200, { items: dtos.map((item) => withStatus.get(item.id) ?? item) });
   }),
 );
 
