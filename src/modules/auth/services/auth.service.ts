@@ -1,5 +1,5 @@
 import { randomBytes } from 'crypto';
-import { AccountType, OtpPurpose, UserStatus } from '@prisma/client';
+import { AccountType, OtpPurpose, UserStatus, type User } from '@prisma/client';
 import { env } from '../../../config/env';
 import { runInTransaction } from '../../../common/database/transaction';
 import { AppError } from '../../../common/errors/app-error';
@@ -88,6 +88,8 @@ class AuthService {
     }
 
     const phoneE164 = resolvePhoneE164(input);
+    const mpinHashPromise = hashSecret(input.mpin);
+    const refreshPromise = generateRefreshSecret();
     await otpService.assertPhoneVerified(phoneE164, OtpPurpose.SIGNUP);
 
     const existing = await userRepository.findByPhoneE164(phoneE164);
@@ -107,7 +109,7 @@ class AuthService {
       throw new AppError('Company name is required', 400, ErrorCode.VALIDATION_ERROR);
     }
 
-    const mpinHash = await hashSecret(input.mpin);
+    const [mpinHash, refresh] = await Promise.all([mpinHashPromise, refreshPromise]);
     const coords = input.locationCoordinates ?? null;
 
     const user = await runInTransaction(async (tx) => {
@@ -135,7 +137,12 @@ class AuthService {
       return created;
     });
 
-    const loginResult = await this.issueLoginResult(user.id, { deviceId: input.deviceId });
+    const loginResult = await this.issueLoginResult(user.id, {
+      deviceId: input.deviceId,
+      refresh,
+      user,
+      hasMpin: true,
+    });
 
     return {
       userId: user.id,
@@ -325,9 +332,14 @@ class AuthService {
 
   private async issueLoginResult(
     userId: string,
-    options: { deviceId: string },
+    options: {
+      deviceId: string;
+      refresh?: Awaited<ReturnType<typeof generateRefreshSecret>>;
+      user?: User;
+      hasMpin?: boolean;
+    },
   ): Promise<AuthLoginResultDto> {
-    const user = await userRepository.findById(userId);
+    const user = options.user ?? (await userRepository.findById(userId));
     if (!user) {
       throw new AppError('User not found', 404, ErrorCode.USER_NOT_FOUND);
     }
@@ -335,7 +347,7 @@ class AuthService {
     this.assertCanAuthenticate(user.status);
 
     const signed = await signUserAccessToken({ sub: user.id });
-    const refresh = await generateRefreshSecret();
+    const refresh = options.refresh ?? (await generateRefreshSecret());
 
     const session = await runInTransaction(async (tx) => {
       await userSessionRepository.revokeAllForUser(user.id, tx);
@@ -353,12 +365,13 @@ class AuthService {
       return created;
     });
 
-    const credential = await userCredentialRepository.findByUserId(user.id);
+    const hasMpin =
+      options.hasMpin ?? Boolean(await userCredentialRepository.findByUserId(user.id));
 
     return {
       accessToken: signed.token,
       refreshToken: `${session.id}.${refresh.secret}`,
-      profile: toUserProfileDto(user, { hasMpin: Boolean(credential) }),
+      profile: toUserProfileDto(user, { hasMpin }),
     };
   }
 
