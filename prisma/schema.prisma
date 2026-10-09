@@ -291,6 +291,11 @@ enum EquipmentDealKind {
   sale
 }
 
+enum EquipmentHandover {
+  pickup
+  delivery
+}
+
 enum EquipmentHoldStatus {
   pending
   selected
@@ -308,6 +313,7 @@ model EquipmentHold {
   offerId   String              @unique
   buyerId   String
   kind      EquipmentDealKind
+  handover  EquipmentHandover   @default(pickup)
   units     Int
   price     String              @default("")
   status    EquipmentHoldStatus @default(pending)

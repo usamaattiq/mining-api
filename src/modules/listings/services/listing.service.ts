@@ -909,12 +909,15 @@ class ListingService {
       }
       const unitPrice = Number(input.price);
       const totalPrice = Math.round(unitPrice * units * 100) / 100;
+      const handover =
+        listing.deliveryAvailable && input.handover === 'delivery' ? 'delivery' : 'pickup';
       await tx.equipmentHold.create({
         data: {
           listingId: listing.id,
           offerId,
           buyerId: viewerId,
           kind,
+          handover,
           units,
           price: String(totalPrice),
           status: 'pending',

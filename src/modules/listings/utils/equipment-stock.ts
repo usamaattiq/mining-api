@@ -137,6 +137,7 @@ export async function withEquipmentAvailability(
             myOfferPrice: mine.price || undefined,
             myOfferQuantity: mine.units,
             myOfferKind: mine.kind,
+            myOfferHandover: mine.handover,
           }
         : {}),
       offers: visible.map((hold) => ({
@@ -147,6 +148,7 @@ export async function withEquipmentAvailability(
         price: hold.price || undefined,
         quantity: hold.units,
         kind: hold.kind,
+        handover: hold.handover,
       })),
     };
     return { ...listing, availableUnits: available, rfq: localRfq };

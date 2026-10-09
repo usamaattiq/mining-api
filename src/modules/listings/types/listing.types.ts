@@ -27,6 +27,7 @@ export type ListingRfqOfferDto = {
   quantity?: number;
   rank?: number;
   kind?: 'rent' | 'sale';
+  handover?: 'pickup' | 'delivery';
   delivery?: 'onsite' | 'online';
   /** Set for the listing owner once this offer is confirmed. */
   responderPhone?: string;
@@ -50,6 +51,7 @@ export type ListingRfqDto = {
   myOfferPrice?: string;
   myOfferQuantity?: number;
   myOfferKind?: 'rent' | 'sale';
+  myOfferHandover?: 'pickup' | 'delivery';
   myOfferDelivery?: 'onsite' | 'online';
   /** Listing owner's phone, shown to the confirmed sender. */
   ownerPhone?: string;
