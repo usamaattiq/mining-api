@@ -824,7 +824,12 @@ class ListingService {
     listingId: string,
     viewerId: string,
     offerId: string,
-    input: { price: string; units: number },
+    input: {
+      price: string;
+      units: number;
+      fulfillment?: 'rent' | 'sale';
+      handover?: 'pickup' | 'delivery';
+    },
   ): Promise<ListingDto> {
     const listing = await listingRepository.findById(listingId);
     if (!listing || listing.status !== 'ACTIVE' || !isSupplierEquipment(listing)) {
@@ -852,11 +857,37 @@ class ListingService {
           ErrorCode.VALIDATION_ERROR,
         );
       }
+      const kind = listing.equipmentMode
+        ? resolveDealKind(listing.equipmentMode, input.fulfillment ?? hold.kind)
+        : hold.kind;
+      if (kind !== hold.kind) {
+        const openSameKind = await tx.equipmentHold.findFirst({
+          where: {
+            listingId: listing.id,
+            buyerId: viewerId,
+            kind,
+            status: { in: ['pending', 'selected'] },
+            NOT: { id: hold.id },
+          },
+        });
+        if (openSameKind) {
+          throw new AppError(
+            'You already have an open offer of this type',
+            400,
+            ErrorCode.VALIDATION_ERROR,
+          );
+        }
+      }
+      const handover = listing.deliveryAvailable
+        ? input.handover === 'delivery' || input.handover === 'pickup'
+          ? input.handover
+          : hold.handover
+        : 'pickup';
       const unitPrice = Number(input.price);
       const totalPrice = Math.round(unitPrice * units * 100) / 100;
       await tx.equipmentHold.update({
         where: { id: hold.id },
-        data: { units, price: String(totalPrice) },
+        data: { units, price: String(totalPrice), kind, handover },
       });
     });
     return this.getById(listing.id, viewerId);

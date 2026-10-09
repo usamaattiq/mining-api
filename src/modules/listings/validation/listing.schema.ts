@@ -144,6 +144,8 @@ export const updateListingOfferSchema = listingOfferActionParamsSchema.extend({
       .max(40)
       .regex(/^\d+(\.\d{1,2})?$/, 'Enter a valid amount'),
     units: z.number().int().min(1).max(9999),
+    fulfillment: z.enum(['rent', 'sale']).optional(),
+    handover: z.enum(['pickup', 'delivery']).optional(),
   }),
 });
 
