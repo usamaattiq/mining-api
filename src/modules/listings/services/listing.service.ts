@@ -11,10 +11,13 @@ import { listingRepository } from '../repositories/listing.repository';
 import type { ListingDto } from '../types/listing.types';
 import {
   attachRfqStatuses,
-  attachedRfqIdsForViewer,
   auctionSnapshotToRfq,
   createListingRfq,
+  openRfqIdsForViewer,
+  settledRfqIdsForViewer,
   snapshotHasAttachedOffer,
+  snapshotHasOpenOffer,
+  snapshotHasSettledOffer,
   withRfq,
 } from '../utils/listing-rfq';
 import { notifyListingRfq } from '../utils/listing-rfq-notify';
@@ -435,31 +438,58 @@ class ListingService {
       await attachRfqStatuses(rows.map(toListingDto), rows, viewerId),
       viewerId,
     );
-    const [hideRfqIds, hideAuctionIds] = await Promise.all([
-      attachedRfqIdsForViewer(viewerId),
-      attachedAuctionIdsForViewer(viewerId),
+    const [openRfqIds, settledRfqIds, openAuctionIds, settledAuctionIds] = await Promise.all([
+      openRfqIdsForViewer(viewerId),
+      settledRfqIdsForViewer(viewerId),
+      openAuctionIdsForViewer(viewerId),
+      settledAuctionIdsForViewer(viewerId),
     ]);
-    const offeredEquipment = new Set(
-      (
-        await prisma.equipmentHold.findMany({
-          where: { buyerId: viewerId, status: { in: ['pending', 'selected', 'active'] } },
-          select: { listingId: true },
-        })
-      ).map((hold) => hold.listingId),
+    const equipmentHolds = await prisma.equipmentHold.findMany({
+      where: { buyerId: viewerId, status: { in: ['pending', 'selected', 'active'] } },
+      select: { listingId: true, status: true },
+    });
+    const settledEquipment = new Set(
+      equipmentHolds.filter((hold) => hold.status === 'active').map((hold) => hold.listingId),
     );
-    return listings.filter((listing) => {
-      if (!('rfq' in listing) || listing.rfq?.status !== 'live') return false;
+    const openEquipment = new Set(
+      equipmentHolds
+        .filter((hold) => hold.status === 'pending' || hold.status === 'selected')
+        .map((hold) => hold.listingId),
+    );
+    const viewerOpen = (listing: (typeof listings)[number]): boolean => {
+      if (!('rfq' in listing) || !listing.rfq) return false;
       if (listing.category === 'equipment' && listing.postedAs === 'supplier') {
-        return !offeredEquipment.has(listing.id);
+        return openEquipment.has(listing.id);
       }
       if (
         listing.category === 'gold' ||
         (listing.category === 'equipment' && listing.requestMode === 'auction')
       ) {
-        return !hideAuctionIds.has(listing.rfq.id);
+        return openAuctionIds.has(listing.rfq.id);
       }
-      return !hideRfqIds.has(listing.rfq.id);
-    });
+      return openRfqIds.has(listing.rfq.id);
+    };
+    const viewerSettled = (listing: (typeof listings)[number]): boolean => {
+      if (!('rfq' in listing) || !listing.rfq) return false;
+      if (listing.category === 'equipment' && listing.postedAs === 'supplier') {
+        return settledEquipment.has(listing.id);
+      }
+      if (
+        listing.category === 'gold' ||
+        (listing.category === 'equipment' && listing.requestMode === 'auction')
+      ) {
+        return settledAuctionIds.has(listing.rfq.id);
+      }
+      return settledRfqIds.has(listing.rfq.id);
+    };
+    return listings
+      .filter((listing) => {
+        if (!('rfq' in listing) || !listing.rfq) return false;
+        if (viewerSettled(listing)) return false;
+        if (viewerOpen(listing)) return true;
+        return listing.rfq.status === 'live';
+      })
+      .sort((a, b) => Number(viewerOpen(b)) - Number(viewerOpen(a)));
   }
 
   async listMyOffers(viewerId: string): Promise<ListingDto[]> {
@@ -1074,19 +1104,30 @@ async function requireSupplierEquipment(
   return listing;
 }
 
-async function attachedAuctionIdsForViewer(viewerId: string): Promise<Set<string>> {
+async function auctionIdsForViewer(
+  viewerId: string,
+  keep: (snapshot: ReturnType<typeof auctionSnapshotToRfq>) => boolean,
+): Promise<Set<string>> {
   if (!auctionClient.isConfigured()) return new Set();
   try {
     const snapshots = await auctionClient.listForParticipant(viewerId);
     return new Set(
       snapshots
         .map(auctionSnapshotToRfq)
-        .filter(snapshotHasAttachedOffer)
+        .filter(keep)
         .map((snapshot) => snapshot.id),
     );
   } catch {
     return new Set();
   }
+}
+
+function openAuctionIdsForViewer(viewerId: string): Promise<Set<string>> {
+  return auctionIdsForViewer(viewerId, snapshotHasOpenOffer);
+}
+
+function settledAuctionIdsForViewer(viewerId: string): Promise<Set<string>> {
+  return auctionIdsForViewer(viewerId, snapshotHasSettledOffer);
 }
 
 export const listingService = new ListingService();

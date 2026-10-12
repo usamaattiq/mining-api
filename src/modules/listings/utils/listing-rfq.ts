@@ -29,14 +29,37 @@ export function snapshotHasAttachedOffer(snapshot: RfqSnapshot): boolean {
   return (snapshot.my_offers ?? []).some((offer) => ATTACHED_OFFER_STATUSES.has(offer.status));
 }
 
-export async function attachedRfqIdsForViewer(viewerId: string): Promise<Set<string>> {
+/** Both sides have accepted: the offer is confirmed. */
+export function snapshotHasSettledOffer(snapshot: RfqSnapshot): boolean {
+  return (snapshot.my_offers ?? []).some((offer) => offer.status === 'confirmed');
+}
+
+/** An offer is in, but the other side has not confirmed it yet. */
+export function snapshotHasOpenOffer(snapshot: RfqSnapshot): boolean {
+  return (snapshot.my_offers ?? []).some(
+    (offer) => offer.status === 'active' || offer.status === 'selected',
+  );
+}
+
+async function rfqIdsForViewer(
+  viewerId: string,
+  keep: (snapshot: RfqSnapshot) => boolean,
+): Promise<Set<string>> {
   if (!rfqClient.isConfigured()) return new Set();
   try {
     const snapshots = await rfqClient.listForResponder(viewerId);
-    return new Set(snapshots.filter(snapshotHasAttachedOffer).map((snapshot) => snapshot.id));
+    return new Set(snapshots.filter(keep).map((snapshot) => snapshot.id));
   } catch {
     return new Set();
   }
+}
+
+export function openRfqIdsForViewer(viewerId: string): Promise<Set<string>> {
+  return rfqIdsForViewer(viewerId, snapshotHasOpenOffer);
+}
+
+export function settledRfqIdsForViewer(viewerId: string): Promise<Set<string>> {
+  return rfqIdsForViewer(viewerId, snapshotHasSettledOffer);
 }
 
 function parseQuantity(value: string | number | null | undefined): number | undefined {
