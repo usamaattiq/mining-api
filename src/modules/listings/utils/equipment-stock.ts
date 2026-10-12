@@ -149,6 +149,7 @@ export async function withEquipmentAvailability(
         quantity: hold.units,
         kind: hold.kind,
         handover: hold.handover,
+        createdAt: hold.createdAt.getTime(),
       })),
     };
     return { ...listing, availableUnits: available, rfq: localRfq };

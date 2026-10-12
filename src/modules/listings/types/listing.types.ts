@@ -29,6 +29,8 @@ export type ListingRfqOfferDto = {
   kind?: 'rent' | 'sale';
   handover?: 'pickup' | 'delivery';
   delivery?: 'onsite' | 'online';
+  /** When the offer was sent. */
+  createdAt?: number;
   /** Set for the listing owner once this offer is confirmed. */
   responderPhone?: string;
 };

@@ -772,6 +772,7 @@ class ListingService {
         buyerPhone: hold.buyer.phoneE164,
         price: hold.price,
         createdAt: hold.createdAt.getTime(),
+        acceptedAt: hold.acceptedAt?.getTime(),
       })),
     };
   }
@@ -1001,7 +1002,10 @@ class ListingService {
             ErrorCode.VALIDATION_ERROR,
           );
         }
-        await tx.equipmentHold.update({ where: { id: hold.id }, data: { status: 'selected' } });
+        await tx.equipmentHold.update({
+          where: { id: hold.id },
+          data: { status: 'selected', acceptedAt: new Date() },
+        });
       } else if (action === 'reject' && hold.status === 'pending') {
         await tx.equipmentHold.update({ where: { id: hold.id }, data: { status: 'rejected' } });
       } else if (action === 'confirm' && hold.status === 'selected') {
