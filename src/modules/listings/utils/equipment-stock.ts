@@ -108,12 +108,17 @@ export async function withEquipmentAvailability(
     if (!isSupplierEquipment(listing)) {
       return { ...listing, availableUnits: available };
     }
-    const mine = holds.find(
+    const mineOpen = holds.find(
       (hold) =>
         hold.listingId === listing.id &&
         hold.buyerId === viewerId &&
         OPEN_OFFER.includes(hold.status as (typeof OPEN_OFFER)[number]),
     );
+    const mineHistory = holds.filter(
+      (hold) =>
+        hold.listingId === listing.id && hold.buyerId === viewerId && hold.status === 'returned',
+    );
+    const mine = mineOpen ?? mineHistory[0];
     const visible = holds.filter(
       (hold) =>
         hold.listingId === listing.id && ['pending', 'selected', 'active'].includes(hold.status),
@@ -127,24 +132,24 @@ export async function withEquipmentAvailability(
       offersCount: visible.length,
       canSubmitOffer: available > 0,
       canDecideOffers: true,
-      canConfirmOffer: mine?.status === 'selected',
-      canDeclineOffer: mine?.status === 'selected',
-      canWithdrawOffer: mine?.status === 'pending',
+      canConfirmOffer: mineOpen?.status === 'selected',
+      canDeclineOffer: mineOpen?.status === 'selected',
+      canWithdrawOffer: mineOpen?.status === 'pending',
       ...(mine
         ? {
             myOfferId: mine.offerId,
-            myOfferStatus: offerStatus(mine.status),
+            myOfferStatus: mineOpen ? offerStatus(mine.status) : 'returned',
             myOfferPrice: mine.price || undefined,
             myOfferQuantity: mine.units,
             myOfferKind: mine.kind,
             myOfferHandover: mine.handover,
           }
         : {}),
-      offers: visible.map((hold) => ({
+      offers: [...visible, ...mineHistory].map((hold) => ({
         id: hold.offerId,
         responderId: hold.buyerId,
         responderName: hold.buyer.fullName,
-        status: offerStatus(hold.status),
+        status: hold.status === 'returned' ? 'returned' : offerStatus(hold.status),
         price: hold.price || undefined,
         quantity: hold.units,
         kind: hold.kind,

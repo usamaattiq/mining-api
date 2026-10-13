@@ -510,7 +510,7 @@ class ListingService {
     const attached = snapshots.filter(snapshotHasAttachedOffer);
     const linked = [...attached, ...attachedAuctions];
     const localHolds = await prisma.equipmentHold.findMany({
-      where: { buyerId: viewerId, status: { in: ['pending', 'selected', 'active'] } },
+      where: { buyerId: viewerId, status: { in: ['pending', 'selected', 'active', 'returned'] } },
       select: { listingId: true },
     });
     if (linked.length === 0 && localHolds.length === 0) return [];
