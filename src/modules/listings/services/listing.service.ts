@@ -50,6 +50,59 @@ function mapRfqError(error: unknown, fallback: string): never {
   throw error;
 }
 
+async function withOfferSentAt(listing: ListingDto, viewerId: string): Promise<ListingDto> {
+  if (!listing.rfq) return listing;
+  const stamps = await prisma.$queryRaw<Array<{ responderId: string; sentAt: Date }>>`
+    SELECT "responderId", "sentAt" FROM "listing_offer_stamps" WHERE "listingId" = ${listing.id}
+  `;
+  const sentAt = new Map(
+    stamps.map((stamp) => [stamp.responderId, new Date(stamp.sentAt).getTime()]),
+  );
+  const missing = new Set<string>();
+  for (const offer of listing.rfq.offers ?? []) {
+    if (offer.createdAt == null && offer.responderId && !sentAt.has(offer.responderId)) {
+      missing.add(offer.responderId);
+    }
+  }
+  if (
+    listing.rfq.myOfferId &&
+    listing.rfq.myOfferCreatedAt == null &&
+    viewerId &&
+    !sentAt.has(viewerId)
+  ) {
+    missing.add(viewerId);
+  }
+  if (missing.size > 0) {
+    const now = Date.now();
+    for (const responderId of missing) {
+      await prisma.$executeRaw`
+        INSERT INTO "listing_offer_stamps" ("id", "listingId", "responderId", "sentAt")
+        VALUES (${crypto.randomUUID()}, ${listing.id}, ${responderId}, NOW())
+        ON CONFLICT ("listingId", "responderId") DO NOTHING
+      `;
+      sentAt.set(responderId, now);
+    }
+  }
+  if (sentAt.size === 0) return listing;
+  const offers = listing.rfq.offers?.map((offer) =>
+    offer.createdAt != null
+      ? offer
+      : {
+          ...offer,
+          ...(sentAt.has(offer.responderId) ? { createdAt: sentAt.get(offer.responderId) } : {}),
+        },
+  );
+  const mine = sentAt.get(viewerId);
+  return {
+    ...listing,
+    rfq: {
+      ...listing.rfq,
+      ...(offers ? { offers } : {}),
+      ...(listing.rfq.myOfferCreatedAt == null && mine != null ? { myOfferCreatedAt: mine } : {}),
+    },
+  };
+}
+
 async function withServiceDelivery(listing: ListingDto, viewerId: string): Promise<ListingDto> {
   if (listing.category !== 'services' || !listing.rfq) return listing;
   const choices = await prisma.serviceOfferChoice.findMany({
@@ -554,7 +607,7 @@ class ListingService {
     const withDelivery = await withServiceDelivery(named, viewerId);
     const [withStock] = await withEquipmentAvailability([withDelivery], viewerId);
     const [withPhones] = await withDealContactPhones([withStock ?? withDelivery], viewerId);
-    return withPhones ?? withStock ?? withDelivery;
+    return withOfferSentAt(withPhones ?? withStock ?? withDelivery, viewerId);
   }
 
   async submitOffer(
@@ -652,6 +705,12 @@ class ListingService {
       if (error instanceof AppError) throw error;
       mapRfqError(error, 'Could not submit offer');
     }
+
+    await prisma.$executeRaw`
+      INSERT INTO "listing_offer_stamps" ("id", "listingId", "responderId", "sentAt")
+      VALUES (${crypto.randomUUID()}, ${listing.id}, ${viewerId}, NOW())
+      ON CONFLICT ("listingId", "responderId") DO NOTHING
+    `;
 
     notifyListingRfq(
       listing.ownerId,

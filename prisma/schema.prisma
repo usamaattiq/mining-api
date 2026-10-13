@@ -234,6 +234,7 @@ model Listing {
   conversations  Conversation[]
   equipmentHolds EquipmentHold[]
   serviceOfferChoices ServiceOfferChoice[]
+  offerStamps ListingOfferStamp[]
 
   @@index([ownerId, category, createdAt])
   @@index([postedAs, category, createdAt])
@@ -284,6 +285,19 @@ model ServiceOfferChoice {
 
   @@unique([listingId, responderId])
   @@map("service_offer_choices")
+}
+
+/** When a supplier sent an offer. Kept here so the tile can show the date even if the remote offer has none. */
+model ListingOfferStamp {
+  id          String   @id @default(uuid())
+  listingId   String
+  responderId String
+  sentAt      DateTime @default(now())
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([listingId, responderId])
+  @@map("listing_offer_stamps")
 }
 
 enum EquipmentDealKind {
