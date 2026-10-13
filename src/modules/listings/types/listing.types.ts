@@ -55,6 +55,7 @@ export type ListingRfqDto = {
   myOfferKind?: 'rent' | 'sale';
   myOfferHandover?: 'pickup' | 'delivery';
   myOfferDelivery?: 'onsite' | 'online';
+  myOfferCreatedAt?: number;
   /** Listing owner's phone, shown to the confirmed sender. */
   ownerPhone?: string;
   isLeading?: boolean;

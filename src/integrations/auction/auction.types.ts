@@ -4,6 +4,7 @@ export type AuctionRank = {
   participant_id: string;
   peak_amount: number;
   rank: number;
+  last_bid_at?: string | null;
 };
 
 export type AuctionSnapshot = {

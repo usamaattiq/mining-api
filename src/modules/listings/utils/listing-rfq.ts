@@ -68,8 +68,15 @@ function parseQuantity(value: string | number | null | undefined): number | unde
   return Number.isFinite(next) ? next : undefined;
 }
 
+function offerSentAt(value: string | null | undefined): number | undefined {
+  if (!value) return undefined;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : undefined;
+}
+
 function mapOffer(offer: RfqOfferSummary): ListingRfqOfferDto {
   const quantity = parseQuantity(offer.offered_quantity);
+  const createdAt = offerSentAt(offer.created_at);
   return {
     id: String(offer.id),
     responderId: String(offer.responder_id ?? offer.responderId ?? ''),
@@ -78,6 +85,7 @@ function mapOffer(offer: RfqOfferSummary): ListingRfqOfferDto {
     ...(offer.price != null ? { price: String(offer.price) } : {}),
     ...(quantity != null ? { quantity } : {}),
     ...(offer.rank != null ? { rank: offer.rank } : {}),
+    ...(createdAt != null ? { createdAt } : {}),
   };
 }
 
@@ -101,6 +109,7 @@ export function auctionSnapshotToRfq(snapshot: AuctionSnapshot): RfqSnapshot {
     status: String(row.participant_id) === selectedId ? 'selected' : 'active',
     price: row.peak_amount,
     rank: row.rank,
+    created_at: row.last_bid_at,
   }));
   const myOffers =
     snapshot.has_participated || snapshot.my_peak_amount != null
@@ -161,6 +170,7 @@ export function toListingRfqDto(snapshot: RfqSnapshot): ListingRfqDto {
           myOfferStatus: mappedMyOffer.status,
           myOfferPrice: mappedMyOffer.price,
           ...(mappedMyOffer.quantity != null ? { myOfferQuantity: mappedMyOffer.quantity } : {}),
+          ...(mappedMyOffer.createdAt != null ? { myOfferCreatedAt: mappedMyOffer.createdAt } : {}),
         }
       : {}),
     ...(snapshot.is_leading ? { isLeading: true } : {}),
@@ -206,7 +216,10 @@ export async function attachRfqStatuses(
       (listing.category === 'equipment' && listing.requestMode === 'auction')
         ? auctionSnapshots.get(remoteId)
         : rfqSnapshots.get(remoteId);
-    return withRfq(listing, snapshot);
+    const next = withRfq(listing, snapshot);
+    const mine = next.rfq?.offers?.find((offer) => offer.responderId === viewerId);
+    if (!next.rfq || next.rfq.myOfferCreatedAt != null || mine?.createdAt == null) return next;
+    return { ...next, rfq: { ...next.rfq, myOfferCreatedAt: mine.createdAt } };
   });
 }
 

@@ -8,6 +8,7 @@ export type RfqOfferSummary = {
   price?: string | number | null;
   offered_quantity?: string | number | null;
   rank?: number;
+  created_at?: string | null;
 };
 
 export type RfqSnapshot = {
