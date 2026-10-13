@@ -103,10 +103,18 @@ export function auctionSnapshotToRfq(snapshot: AuctionSnapshot): RfqSnapshot {
   const selectedId = snapshot.selected_participant_id
     ? String(snapshot.selected_participant_id)
     : undefined;
+  const confirmedId = snapshot.confirmed_participant_id
+    ? String(snapshot.confirmed_participant_id)
+    : undefined;
   const offers = (snapshot.ranking ?? []).map((row) => ({
     id: String(row.participant_id),
     responder_id: String(row.participant_id),
-    status: String(row.participant_id) === selectedId ? 'selected' : 'active',
+    status:
+      String(row.participant_id) === confirmedId
+        ? 'confirmed'
+        : String(row.participant_id) === selectedId
+          ? 'selected'
+          : 'active',
     price: row.peak_amount,
     rank: row.rank,
     created_at: row.last_bid_at,

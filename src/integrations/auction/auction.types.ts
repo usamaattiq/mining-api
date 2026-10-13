@@ -17,6 +17,7 @@ export type AuctionSnapshot = {
   ends_at?: string | null;
   current_amount?: number | null;
   selected_participant_id?: string | null;
+  confirmed_participant_id?: string | null;
   has_participated?: boolean;
   participant_status?: string | null;
   my_peak_amount?: number | null;
