@@ -226,6 +226,11 @@ model Listing {
   /** RMS RFQ id — set for equipment and service listings when RFQ is configured. */
   rfqId String? @unique
 
+  /** When the current auction winner was offered the deal. After 30 minutes the owner is asked to skip. */
+  auctionOfferSelectedAt DateTime?
+  auctionSelectedParticipantId String?
+  auctionSkipPromptedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

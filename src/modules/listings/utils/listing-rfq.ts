@@ -3,6 +3,7 @@ import { auctionClient } from '../../../integrations/auction/auction.client';
 import type { AuctionSnapshot } from '../../../integrations/auction/auction.types';
 import { rfqClient } from '../../../integrations/rfq/rfq.client';
 import type { RfqOfferSummary, RfqSnapshot } from '../../../integrations/rfq/rfq.types';
+import { AUCTION_CONFIRMATION_TIMEOUT_MS } from '../constants';
 import { listingRepository } from '../repositories/listing.repository';
 import type {
   ListingDto,
@@ -226,8 +227,31 @@ export async function attachRfqStatuses(
         : rfqSnapshots.get(remoteId);
     const next = withRfq(listing, snapshot);
     const mine = next.rfq?.offers?.find((offer) => offer.responderId === viewerId);
-    if (!next.rfq || next.rfq.myOfferCreatedAt != null || mine?.createdAt == null) return next;
-    return { ...next, rfq: { ...next.rfq, myOfferCreatedAt: mine.createdAt } };
+    const withSentAt =
+      next.rfq && next.rfq.myOfferCreatedAt == null && mine?.createdAt != null
+        ? { ...next, rfq: { ...next.rfq, myOfferCreatedAt: mine.createdAt } }
+        : next;
+    const row = rows.find((item) => item.id === listing.id);
+    const selectedAt = row?.auctionOfferSelectedAt?.getTime();
+    const ownerViewing = Boolean(row && row.ownerId === viewerId);
+    const awaiting =
+      withSentAt.rfq &&
+      withSentAt.rfq.status !== 'completed' &&
+      withSentAt.rfq.status !== 'confirmed' &&
+      withSentAt.rfq.status !== 'closed';
+    if (
+      !ownerViewing ||
+      !withSentAt.rfq ||
+      !awaiting ||
+      selectedAt == null ||
+      Date.now() - selectedAt < AUCTION_CONFIRMATION_TIMEOUT_MS
+    ) {
+      return withSentAt;
+    }
+    return {
+      ...withSentAt,
+      rfq: { ...withSentAt.rfq, needsOwnerSkipConfirm: true },
+    };
   });
 }
 

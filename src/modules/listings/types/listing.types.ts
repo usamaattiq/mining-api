@@ -48,6 +48,8 @@ export type ListingRfqDto = {
   canConfirmOffer?: boolean;
   canDeclineOffer?: boolean;
   canWithdrawOffer?: boolean;
+  /** Owner should confirm sending the deal to the next bidder after 30 minutes of silence. */
+  needsOwnerSkipConfirm?: boolean;
   myOfferId?: string;
   myOfferStatus?: string;
   myOfferPrice?: string;

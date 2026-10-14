@@ -15,6 +15,7 @@ import { listingsRouter } from './modules/listings/listings.router';
 import { messagesRouter } from './modules/messages/messages.router';
 import { uploadsRouter } from './modules/uploads/uploads.router';
 import { initChatSocket } from './realtime/chat.socket';
+import { startAuctionConfirmationTimeoutJob } from './modules/listings/jobs/auction-confirmation-timeout';
 
 const app = express();
 
@@ -53,6 +54,7 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 
 const server = http.createServer(app);
 initChatSocket(server);
+const stopAuctionTimeoutJob = startAuctionConfirmationTimeoutJob();
 
 server.listen(env.PORT, env.HOST, () => {
   logger.info(`mining-api listening on http://${env.HOST}:${env.PORT}`);
@@ -60,6 +62,7 @@ server.listen(env.PORT, env.HOST, () => {
 
 function shutdown(signal: string): void {
   logger.info(`${signal} received, shutting down mining-api…`);
+  stopAuctionTimeoutJob();
   server.close(() => {
     logger.info('HTTP server closed');
     process.exit(0);

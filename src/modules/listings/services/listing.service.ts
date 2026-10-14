@@ -761,10 +761,29 @@ class ListingService {
         responderId = offer ? String(offer.responder_id ?? offer.responderId ?? '') : undefined;
         if (action === 'select') {
           await auctionClient.ownerAction(listing.rfqId, viewerId, 'select-next');
+          const after = await auctionClient.getSnapshot(listing.rfqId, viewerId);
+          const selected = after.selected_participant_id
+            ? String(after.selected_participant_id)
+            : undefined;
+          responderId = selected ?? responderId;
+          await listingRepository.setAuctionSelection(listing.id, {
+            participantId: selected ?? null,
+            selectedAt: selected ? new Date() : null,
+          });
         } else if (action === 'reject') {
           await auctionClient.ownerAction(listing.rfqId, viewerId, 'close');
+          await listingRepository.setAuctionSelection(listing.id, {
+            participantId: null,
+            selectedAt: null,
+          });
         } else {
           await auctionClient.participantAction(listing.rfqId, viewerId, action);
+          if (action === 'confirm' || action === 'decline') {
+            await listingRepository.setAuctionSelection(listing.id, {
+              participantId: null,
+              selectedAt: null,
+            });
+          }
         }
       } else {
         const snapshot = await rfqClient.getSnapshot(listing.rfqId, viewerId);

@@ -63,6 +63,38 @@ class ListingRepository {
     });
   }
 
+  setAuctionSelection(
+    id: string,
+    selection: {
+      participantId: string | null;
+      selectedAt: Date | null;
+      skipPromptedAt?: Date | null;
+    },
+  ): Promise<ListingWithMedia> {
+    return prisma.listing.update({
+      where: { id },
+      data: {
+        auctionSelectedParticipantId: selection.participantId,
+        auctionOfferSelectedAt: selection.selectedAt,
+        auctionSkipPromptedAt: selection.skipPromptedAt ?? null,
+      },
+      include: listingInclude,
+    });
+  }
+
+  findStaleAuctionSelections(selectedBefore: Date): Promise<ListingWithMedia[]> {
+    return prisma.listing.findMany({
+      where: {
+        status: 'ACTIVE',
+        rfqId: { not: null },
+        auctionOfferSelectedAt: { lte: selectedBefore },
+        auctionSkipPromptedAt: null,
+        OR: [{ category: 'gold' }, { requestMode: 'auction' }],
+      },
+      include: listingInclude,
+    });
+  }
+
   findMine(input: {
     ownerId: string;
     postedAs?: MarketplaceRole;
