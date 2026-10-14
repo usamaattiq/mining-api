@@ -1,6 +1,6 @@
 import { logger } from '../../../common/logger';
 import { auctionClient } from '../../../integrations/auction/auction.client';
-import type { AuctionSnapshot } from '../../../integrations/auction/auction.types';
+import type { AuctionBid, AuctionSnapshot } from '../../../integrations/auction/auction.types';
 import { rfqClient } from '../../../integrations/rfq/rfq.client';
 import type { RfqOfferSummary, RfqSnapshot } from '../../../integrations/rfq/rfq.types';
 import { AUCTION_CONFIRMATION_TIMEOUT_MS } from '../constants';
@@ -12,7 +12,14 @@ import type {
   ListingWithMedia,
 } from '../types/listing.types';
 
-export const ATTACHED_OFFER_STATUSES = new Set(['active', 'selected', 'confirmed']);
+export const ATTACHED_OFFER_STATUSES = new Set([
+  'active',
+  'selected',
+  'confirmed',
+  'declined',
+  'timed_out',
+  'timed-out',
+]);
 
 function latestOffersByResponder(offers: RfqOfferSummary[]): RfqOfferSummary[] {
   const seen = new Set<string>();
@@ -38,7 +45,12 @@ export function snapshotHasSettledOffer(snapshot: RfqSnapshot): boolean {
 /** An offer is in, but the other side has not confirmed it yet. */
 export function snapshotHasOpenOffer(snapshot: RfqSnapshot): boolean {
   return (snapshot.my_offers ?? []).some(
-    (offer) => offer.status === 'active' || offer.status === 'selected',
+    (offer) =>
+      offer.status === 'active' ||
+      offer.status === 'selected' ||
+      offer.status === 'declined' ||
+      offer.status === 'timed_out' ||
+      offer.status === 'timed-out',
   );
 }
 
@@ -91,7 +103,9 @@ function mapOffer(offer: RfqOfferSummary): ListingRfqOfferDto {
 }
 
 function myOfferStatus(snapshot: AuctionSnapshot): string {
-  if (snapshot.participant_status === 'timed_out') return 'timed_out';
+  if (snapshot.participant_status === 'timed_out' || snapshot.participant_status === 'timed-out') {
+    return 'timed_out';
+  }
   if (snapshot.participant_status === 'declined') return 'declined';
   if (snapshot.participant_status === 'withdrawn') return 'withdrawn';
   if (snapshot.status === 'awaiting-your-confirmation') return 'selected';
@@ -99,27 +113,68 @@ function myOfferStatus(snapshot: AuctionSnapshot): string {
   return 'active';
 }
 
+function auctionRowStatus(
+  participantId: string,
+  participantStatus: string | null | undefined,
+  selectedId: string | undefined,
+  confirmedId: string | undefined,
+): string {
+  if (confirmedId === participantId) return 'confirmed';
+  const status = (participantStatus ?? '').replace('-', '_');
+  if (status === 'declined' || status === 'timed_out' || status === 'withdrawn') return status;
+  if (selectedId === participantId) return 'selected';
+  return 'active';
+}
+
+function auctionOffersFromBids(
+  bids: AuctionBid[],
+  selectedId: string | undefined,
+  confirmedId: string | undefined,
+): RfqOfferSummary[] {
+  const byParticipant = new Map<string, AuctionBid>();
+  for (const bid of bids) {
+    const id = String(bid.participant_id);
+    if (!byParticipant.has(id)) byParticipant.set(id, bid);
+  }
+  return [...byParticipant.values()]
+    .sort((left, right) => right.amount - left.amount)
+    .map((bid, index) => {
+      const participantId = String(bid.participant_id);
+      return {
+        id: participantId,
+        responder_id: participantId,
+        status: auctionRowStatus(participantId, bid.participant_status, selectedId, confirmedId),
+        price: bid.amount,
+        rank: index + 1,
+        created_at: bid.placed_at,
+      };
+    });
+}
+
 /** Auction snapshots reuse the listing RFQ shape the app already renders. */
-export function auctionSnapshotToRfq(snapshot: AuctionSnapshot): RfqSnapshot {
+export function auctionSnapshotToRfq(snapshot: AuctionSnapshot, bids?: AuctionBid[]): RfqSnapshot {
   const selectedId = snapshot.selected_participant_id
     ? String(snapshot.selected_participant_id)
     : undefined;
   const confirmedId = snapshot.confirmed_participant_id
     ? String(snapshot.confirmed_participant_id)
     : undefined;
-  const offers = (snapshot.ranking ?? []).map((row) => ({
-    id: String(row.participant_id),
-    responder_id: String(row.participant_id),
-    status:
-      String(row.participant_id) === confirmedId
-        ? 'confirmed'
-        : String(row.participant_id) === selectedId
-          ? 'selected'
-          : 'active',
-    price: row.peak_amount,
-    rank: row.rank,
-    created_at: row.last_bid_at,
-  }));
+  const offers =
+    bids && bids.length > 0
+      ? auctionOffersFromBids(bids, selectedId, confirmedId)
+      : (snapshot.ranking ?? []).map((row) => ({
+          id: String(row.participant_id),
+          responder_id: String(row.participant_id),
+          status: auctionRowStatus(
+            String(row.participant_id),
+            row.participant_status,
+            selectedId,
+            confirmedId,
+          ),
+          price: row.peak_amount,
+          rank: row.rank,
+          created_at: row.last_bid_at,
+        }));
   const myOffers =
     snapshot.has_participated || snapshot.my_peak_amount != null
       ? [
@@ -264,8 +319,11 @@ async function loadAuctionSnapshots(
   const rows = await Promise.all(
     [...new Set(auctionIds)].map(async (id) => {
       try {
-        const snapshot = await auctionClient.getSnapshot(id, viewerId);
-        return [id, auctionSnapshotToRfq(snapshot)] as const;
+        const [snapshot, bidList] = await Promise.all([
+          auctionClient.getSnapshot(id, viewerId),
+          auctionClient.listBids(id, viewerId).catch(() => ({ bids: [] })),
+        ]);
+        return [id, auctionSnapshotToRfq(snapshot, bidList.bids)] as const;
       } catch {
         return null;
       }

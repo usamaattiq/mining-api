@@ -1,6 +1,6 @@
 import { env } from '../../config/env';
 import { RfqApiError } from '../rfq/rfq.client';
-import type { AuctionSnapshot, CreateAuctionInput } from './auction.types';
+import type { AuctionBidList, AuctionSnapshot, CreateAuctionInput } from './auction.types';
 
 class AuctionClient {
   private readonly timeoutMs = env.AUCTION_API_TIMEOUT;
@@ -45,6 +45,17 @@ class AuctionClient {
     return this.request<AuctionSnapshot>('GET', `/auctions/${auctionId}`, undefined, {
       'X-Participant-Id': viewerId,
     });
+  }
+
+  async listBids(auctionId: string, viewerId: string): Promise<AuctionBidList> {
+    const data = await this.request<AuctionBidList | AuctionBidList['bids']>(
+      'GET',
+      `/auctions/${auctionId}/bids`,
+      undefined,
+      { 'X-Participant-Id': viewerId },
+    );
+    if (Array.isArray(data)) return { bids: data };
+    return { bids: data.bids ?? [] };
   }
 
   async listForParticipant(participantId: string): Promise<AuctionSnapshot[]> {

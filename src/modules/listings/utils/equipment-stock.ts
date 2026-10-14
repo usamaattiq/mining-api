@@ -4,6 +4,7 @@ import type { EquipmentListingDto, ListingDto, ListingRfqDto } from '../types/li
 
 const RESERVED = ['selected', 'active'] as const;
 const OPEN_OFFER = ['pending', 'selected', 'active'] as const;
+const VISIBLE_OFFER = ['pending', 'selected', 'active', 'declined'] as const;
 
 export type EquipmentDealKind = 'rent' | 'sale';
 
@@ -98,7 +99,10 @@ export async function withEquipmentAvailability(
     ids.length === 0
       ? []
       : await prisma.equipmentHold.findMany({
-          where: { listingId: { in: ids }, status: { in: [...OPEN_OFFER, 'returned'] } },
+          where: {
+            listingId: { in: ids },
+            status: { in: [...VISIBLE_OFFER, 'returned'] },
+          },
           include: { buyer: { select: { id: true, fullName: true } } },
           orderBy: { createdAt: 'desc' },
         });
@@ -121,7 +125,7 @@ export async function withEquipmentAvailability(
     const mine = mineOpen ?? mineHistory[0];
     const visible = holds.filter(
       (hold) =>
-        hold.listingId === listing.id && ['pending', 'selected', 'active'].includes(hold.status),
+        hold.listingId === listing.id && (VISIBLE_OFFER as readonly string[]).includes(hold.status),
     );
     const localRfq: ListingRfqDto = {
       id: `equipment:${listing.id}`,
