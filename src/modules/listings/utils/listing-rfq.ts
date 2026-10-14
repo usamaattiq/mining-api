@@ -388,11 +388,13 @@ async function createEquipmentAuction(
   if (!auctionClient.isConfigured()) return { listing };
   const now = Date.now();
   const startsAt = schedule?.startsAt ?? null;
-  const endsAt = schedule?.endsAt ?? null;
+  const endsAt = schedule?.endsAt ?? listing.auctionEndDate?.getTime() ?? null;
   const durationMinutes =
     startsAt != null && endsAt != null
       ? Math.max(1, Math.round((endsAt - startsAt) / 60_000))
-      : 24 * 60;
+      : endsAt != null
+        ? Math.max(1, Math.round((endsAt - now) / 60_000))
+        : 60;
   const activateImmediately = startsAt == null || startsAt <= now;
   try {
     const snapshot = await auctionClient.createAuction({

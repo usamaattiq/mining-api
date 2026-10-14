@@ -252,6 +252,10 @@ function listingCreateData(
       deliveryPricePerKm: input.deliveryPricePerKm,
       postedAs: input.postedAs,
       requestMode: input.postedAs === 'buyer' ? input.requestMode : 'rfq',
+      auctionEndDate:
+        input.postedAs === 'buyer' && input.requestMode === 'auction'
+          ? epochToDate(input.auctionEndDate)
+          : null,
       serviceDate: epochToDate(input.neededDate),
       media,
     };
@@ -640,16 +644,19 @@ class ListingService {
     }
 
     try {
+      const auctionBid = listing.category === 'gold' || listing.requestMode === 'auction';
       const catalogUnits = Math.max(listing.units ?? 1, 1);
-      const available =
-        listing.category === 'equipment'
+      const available = auctionBid
+        ? catalogUnits
+        : listing.category === 'equipment'
           ? await availableUnitsFor(listing.id, catalogUnits)
           : catalogUnits;
-      if (listing.category === 'equipment' && available < 1) {
+      if (!auctionBid && listing.category === 'equipment' && available < 1) {
         throw new AppError('No units left on this listing', 400, ErrorCode.VALIDATION_ERROR);
       }
-      const units =
-        listing.category === 'equipment'
+      const units = auctionBid
+        ? undefined
+        : listing.category === 'equipment'
           ? Math.min(Math.max(input.units ?? 1, 1), available)
           : undefined;
       if (
@@ -672,7 +679,7 @@ class ListingService {
           ErrorCode.VALIDATION_ERROR,
         );
       }
-      if (listing.category === 'equipment' && (input.units ?? 1) > available) {
+      if (!auctionBid && listing.category === 'equipment' && (input.units ?? 1) > available) {
         throw new AppError(
           `Only ${available} units are still available`,
           400,
@@ -681,8 +688,8 @@ class ListingService {
       }
       const unitPrice = Number(input.price);
       const totalPrice = units != null ? Math.round(unitPrice * units * 100) / 100 : unitPrice;
-      if (listing.category === 'gold' || listing.requestMode === 'auction') {
-        const amount = Math.round(totalPrice);
+      if (auctionBid) {
+        const amount = Math.round(unitPrice);
         if (!Number.isFinite(amount) || amount < 1) {
           throw new AppError('Enter a bid of at least 1', 400, ErrorCode.VALIDATION_ERROR);
         }

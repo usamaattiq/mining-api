@@ -55,6 +55,7 @@ export function toListingDto(listing: ListingWithMedia): ListingDto {
       deliveryPricePerKm: listing.deliveryPricePerKm ?? '',
       postedAs: listing.postedAs,
       requestMode: listing.requestMode === 'auction' ? 'auction' : 'rfq',
+      auctionEndDate: listing.auctionEndDate ? listing.auctionEndDate.getTime() : null,
       neededDate: listing.serviceDate ? listing.serviceDate.getTime() : null,
       owner,
       createdAt,
