@@ -3,10 +3,31 @@ import { prisma } from '../../../common/database/prisma';
 import type { EquipmentListingDto, ListingDto, ListingRfqDto } from '../types/listing.types';
 
 const RESERVED = ['selected', 'active'] as const;
+const REQUEST_RESERVED = new Set(['active', 'pending', 'selected', 'confirmed']);
+const REQUEST_FILLED = new Set(['selected', 'confirmed']);
 const OPEN_OFFER = ['pending', 'selected', 'active'] as const;
 const VISIBLE_OFFER = ['pending', 'selected', 'active', 'declined'] as const;
 
 export type EquipmentDealKind = 'rent' | 'sale';
+
+export function buyerRequestUnitSplit(listing: {
+  units: number;
+  rfq?: { offers?: { status: string; quantity?: number }[] };
+}): { reserved: number; filled: number; available: number } {
+  let reserved = 0;
+  let filled = 0;
+  for (const offer of listing.rfq?.offers ?? []) {
+    const units = Math.max(offer.quantity ?? 1, 1);
+    if (REQUEST_RESERVED.has(offer.status)) reserved += units;
+    if (REQUEST_FILLED.has(offer.status)) filled += units;
+  }
+  const total = Math.max(listing.units, 1);
+  return {
+    reserved,
+    filled,
+    available: Math.max(0, total - reserved),
+  };
+}
 
 export function isSupplierEquipment(listing: { category: string; postedAs: string }): boolean {
   return listing.category === 'equipment' && listing.postedAs === 'supplier';
@@ -110,6 +131,26 @@ export async function withEquipmentAvailability(
     if (listing.category !== 'equipment') return listing;
     const available = Math.max(0, listing.units - (reserved.get(listing.id) ?? 0));
     if (!isSupplierEquipment(listing)) {
+      if (listing.postedAs === 'buyer' && listing.requestMode !== 'auction' && listing.rfq) {
+        const split = buyerRequestUnitSplit(listing);
+        const done = split.filled >= listing.units;
+        return {
+          ...listing,
+          availableUnits: split.available,
+          rfq: {
+            ...listing.rfq,
+            canSubmitOffer: split.available > 0 && listing.rfq.canSubmitOffer !== false,
+            ...(done
+              ? {
+                  status: 'completed',
+                  statusLabel: 'Completed',
+                  statusVariant: 'muted' as const,
+                  canSubmitOffer: false,
+                }
+              : {}),
+          },
+        };
+      }
       return { ...listing, availableUnits: available };
     }
     const mineOpen = holds.find(

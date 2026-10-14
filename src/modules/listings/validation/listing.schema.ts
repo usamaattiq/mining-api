@@ -72,7 +72,17 @@ const goldBodySchema = z.object({
 });
 
 export const createListingBodySchema = z.object({
-  body: z.discriminatedUnion('category', [equipmentBodySchema, serviceBodySchema, goldBodySchema]),
+  body: z
+    .discriminatedUnion('category', [equipmentBodySchema, serviceBodySchema, goldBodySchema])
+    .superRefine((value, ctx) => {
+      if (value.category === 'equipment' && value.postedAs === 'buyer' && value.mode === 'both') {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'A buyer request is either rent or buy',
+          path: ['mode'],
+        });
+      }
+    }),
 });
 
 export const listListingsQuerySchema = z.object({

@@ -238,6 +238,16 @@ function supplierEquipmentStillListed(listing: {
   return Date.now() - listing.createdAt.getTime() < SUPPLIER_EQUIPMENT_LISTING_MS;
 }
 
+function reservedRequestUnits(
+  offers: { status?: string; offered_quantity?: number | string | null }[] | undefined,
+): number {
+  return (offers ?? [])
+    .filter((offer) =>
+      ['active', 'pending', 'selected', 'confirmed'].includes(String(offer.status)),
+    )
+    .reduce((sum, offer) => sum + Math.max(Number(offer.offered_quantity) || 1, 1), 0);
+}
+
 function epochToDate(value: number | null | undefined): Date | null {
   if (value === undefined || value === null) return null;
   return new Date(value);
@@ -671,12 +681,19 @@ class ListingService {
 
     try {
       const auctionBid = listing.category === 'gold' || listing.requestMode === 'auction';
+      const buyerEquipmentRequest =
+        listing.category === 'equipment' && listing.postedAs === 'buyer' && !auctionBid;
       const catalogUnits = Math.max(listing.units ?? 1, 1);
+      const buyerSnapshot = buyerEquipmentRequest
+        ? await rfqClient.getSnapshot(listing.rfqId, viewerId)
+        : undefined;
       const available = auctionBid
         ? catalogUnits
-        : listing.category === 'equipment'
-          ? await availableUnitsFor(listing.id, catalogUnits)
-          : catalogUnits;
+        : buyerEquipmentRequest
+          ? Math.max(0, catalogUnits - reservedRequestUnits(buyerSnapshot?.offers))
+          : listing.category === 'equipment'
+            ? await availableUnitsFor(listing.id, catalogUnits)
+            : catalogUnits;
       if (!auctionBid && listing.category === 'equipment' && available < 1) {
         throw new AppError('No units left on this listing', 400, ErrorCode.VALIDATION_ERROR);
       }
@@ -842,13 +859,42 @@ class ListingService {
           (row) => String(row.id) === offerId,
         );
         responderId = offer ? String(offer.responder_id ?? offer.responderId ?? '') : undefined;
+        const buyerEquipmentRequest =
+          listing.category === 'equipment' &&
+          listing.postedAs === 'buyer' &&
+          listing.requestMode !== 'auction';
+        if (buyerEquipmentRequest && (action === 'select' || action === 'confirm')) {
+          const accepting = Math.max(Number(offer?.offered_quantity) || 1, 1);
+          const alreadyFilled = (snapshot.offers ?? [])
+            .filter(
+              (row) =>
+                String(row.id) !== offerId &&
+                (row.status === 'selected' || row.status === 'confirmed'),
+            )
+            .reduce((sum, row) => sum + Math.max(Number(row.offered_quantity) || 1, 1), 0);
+          if (alreadyFilled + accepting > Math.max(listing.units ?? 1, 1)) {
+            throw new AppError(
+              'That offer is more units than this request still needs',
+              400,
+              ErrorCode.VALIDATION_ERROR,
+            );
+          }
+        }
         await rfqClient.decideOffer({
           rfqId: listing.rfqId,
           offerId,
           actorId: viewerId,
           action,
         });
-        if (action === 'confirm') {
+        if (buyerEquipmentRequest && (action === 'select' || action === 'confirm')) {
+          const after = await rfqClient.getSnapshot(listing.rfqId, listing.ownerId);
+          const filled = (after.offers ?? [])
+            .filter((row) => row.status === 'selected' || row.status === 'confirmed')
+            .reduce((sum, row) => sum + Math.max(Number(row.offered_quantity) || 1, 1), 0);
+          if (filled >= Math.max(listing.units ?? 1, 1)) {
+            await rfqClient.completeRfq(listing.rfqId, listing.ownerId).catch(() => undefined);
+          }
+        } else if (action === 'confirm') {
           await rfqClient.completeRfq(listing.rfqId, listing.ownerId).catch(() => undefined);
         }
       }
@@ -1034,6 +1080,28 @@ class ListingService {
       ) {
         throw new AppError('Choose rent or sale for this offer', 400, ErrorCode.VALIDATION_ERROR);
       }
+      const buyerEquipmentRequest =
+        listing.category === 'equipment' &&
+        listing.postedAs === 'buyer' &&
+        listing.requestMode !== 'auction';
+      const nextUnits = Math.max(input.units ?? 1, 1);
+      if (buyerEquipmentRequest) {
+        const snapshot = await rfqClient.getSnapshot(listing.rfqId, viewerId);
+        const others = (snapshot.offers ?? []).filter((row) => String(row.id) !== offerId);
+        const available = Math.max(
+          0,
+          Math.max(listing.units ?? 1, 1) - reservedRequestUnits(others),
+        );
+        if (available < 1 || nextUnits > available) {
+          throw new AppError(
+            available < 1
+              ? 'No units left on this request'
+              : `Only ${available} units are still available`,
+            400,
+            ErrorCode.VALIDATION_ERROR,
+          );
+        }
+      }
       try {
         try {
           await rfqClient.updateOffer(listing.rfqId, offerId, viewerId, unitPrice);
@@ -1042,9 +1110,7 @@ class ListingService {
             rfqId: listing.rfqId,
             responderId: viewerId,
             price: unitPrice,
-            ...(listing.category === 'equipment'
-              ? { offeredQuantity: Math.max(input.units ?? 1, 1) }
-              : {}),
+            ...(listing.category === 'equipment' ? { offeredQuantity: nextUnits } : {}),
           });
         }
       } catch (error) {
