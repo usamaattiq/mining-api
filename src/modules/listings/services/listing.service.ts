@@ -948,14 +948,72 @@ class ListingService {
     offerId: string,
     input: {
       price: string;
-      units: number;
+      units?: number;
       fulfillment?: 'rent' | 'sale';
+      delivery?: 'onsite' | 'online';
       handover?: 'pickup' | 'delivery';
     },
   ): Promise<ListingDto> {
     const listing = await listingRepository.findById(listingId);
-    if (!listing || listing.status !== 'ACTIVE' || !isSupplierEquipment(listing)) {
+    if (!listing || listing.status !== 'ACTIVE') {
       throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
+    }
+    if (!isSupplierEquipment(listing)) {
+      if (!listing.rfqId) {
+        throw new AppError('Listing not found', 404, ErrorCode.NOT_FOUND);
+      }
+      if (listing.ownerId === viewerId) {
+        throw new AppError('The listing owner cannot update this offer', 400, ErrorCode.FORBIDDEN);
+      }
+      if (listing.category === 'gold' || listing.requestMode === 'auction') {
+        throw new AppError(
+          'Update this bid from the auction input',
+          400,
+          ErrorCode.VALIDATION_ERROR,
+        );
+      }
+      const unitPrice = Number(input.price);
+      if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+        throw new AppError('Enter a valid amount', 400, ErrorCode.VALIDATION_ERROR);
+      }
+      if (
+        listing.category === 'services' &&
+        listing.serviceType === 'both' &&
+        input.delivery !== 'onsite' &&
+        input.delivery !== 'online'
+      ) {
+        throw new AppError(
+          'Choose onsite or online for this offer',
+          400,
+          ErrorCode.VALIDATION_ERROR,
+        );
+      }
+      try {
+        try {
+          await rfqClient.updateOffer(listing.rfqId, offerId, viewerId, unitPrice);
+        } catch {
+          await rfqClient.submitOffer({
+            rfqId: listing.rfqId,
+            responderId: viewerId,
+            price: unitPrice,
+          });
+        }
+      } catch (error) {
+        if (error instanceof AppError) throw error;
+        mapRfqError(error, 'Could not update offer');
+      }
+      if (
+        listing.category === 'services' &&
+        listing.serviceType === 'both' &&
+        (input.delivery === 'onsite' || input.delivery === 'online')
+      ) {
+        await prisma.serviceOfferChoice.upsert({
+          where: { listingId_responderId: { listingId: listing.id, responderId: viewerId } },
+          create: { listingId: listing.id, responderId: viewerId, mode: input.delivery },
+          update: { mode: input.delivery },
+        });
+      }
+      return this.getById(listing.id, viewerId);
     }
     await runSerializable(async (tx) => {
       const hold = await tx.equipmentHold.findFirst({
@@ -969,7 +1027,7 @@ class ListingService {
       }
       const totalUnits = Math.max(listing.units ?? 1, 1);
       const available = await availableUnitsFor(listing.id, totalUnits, tx);
-      const units = Math.max(input.units, 1);
+      const units = Math.max(input.units ?? 1, 1);
       if (available < 1 || units > available) {
         throw new AppError(
           available < 1

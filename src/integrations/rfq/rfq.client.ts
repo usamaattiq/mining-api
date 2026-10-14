@@ -84,6 +84,20 @@ class RfqClient {
     );
   }
 
+  async updateOffer(
+    rfqId: string,
+    offerId: string,
+    actorId: string,
+    price: number,
+  ): Promise<unknown> {
+    return this.request(
+      'PATCH',
+      `/rfqs/${rfqId}/offers/${offerId}`,
+      { price },
+      { 'X-Responder-Id': actorId },
+    );
+  }
+
   async decideOffer(input: DecideRfqOfferInput): Promise<RfqSnapshot> {
     return this.request<RfqSnapshot>(
       'POST',
