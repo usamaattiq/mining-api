@@ -345,7 +345,10 @@ class ListingService {
       await inboxRepository.create(
         {
           userId: ownerId,
-          titleKey: 'notifications.listingLiveTitle',
+          titleKey:
+            input.postedAs === 'buyer'
+              ? 'notifications.requestLiveTitle'
+              : 'notifications.listingLiveTitle',
           bodyKey: `"${input.title}" is now live.`,
           icon: 'checkmark-circle-outline',
           target: 'Requests',
