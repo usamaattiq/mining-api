@@ -56,7 +56,12 @@ const goldBodySchema = z.object({
   category: z.literal('gold'),
   title: z.string().trim().min(1).max(20),
   description: z.string().trim().max(500).default(''),
-  weight: z.string().trim().max(40).default(''),
+  weight: z
+    .string()
+    .trim()
+    .max(40)
+    .regex(/^$|^\d+(?:\.\d+)?$/, 'Weight must be digits with an optional decimal')
+    .default(''),
   purityLabel: z.string().trim().max(80).default(''),
   price: z.string().trim().max(40).default(''),
   auctionStartDate: z.number().int().nullable().optional(),
