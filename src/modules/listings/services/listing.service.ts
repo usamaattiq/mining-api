@@ -103,6 +103,31 @@ async function withOfferSentAt(listing: ListingDto, viewerId: string): Promise<L
   };
 }
 
+async function withEquipmentOfferKind(listing: ListingDto, viewerId: string): Promise<ListingDto> {
+  if (listing.category !== 'equipment' || listing.postedAs !== 'buyer' || !listing.rfq) {
+    return listing;
+  }
+  const choices = await prisma.equipmentOfferChoice.findMany({
+    where: { listingId: listing.id },
+    select: { responderId: true, kind: true },
+  });
+  if (choices.length === 0) return listing;
+  const byResponder = new Map(choices.map((choice) => [choice.responderId, choice.kind]));
+  const offers = listing.rfq.offers?.map((offer) => {
+    const kind = byResponder.get(offer.responderId);
+    return kind ? { ...offer, kind } : offer;
+  });
+  const mine = byResponder.get(viewerId);
+  return {
+    ...listing,
+    rfq: {
+      ...listing.rfq,
+      ...(offers ? { offers } : {}),
+      ...(mine ? { myOfferKind: mine } : {}),
+    },
+  };
+}
+
 async function withServiceDelivery(listing: ListingDto, viewerId: string): Promise<ListingDto> {
   if (listing.category !== 'services' || !listing.rfq) return listing;
   const choices = await prisma.serviceOfferChoice.findMany({
@@ -615,9 +640,10 @@ class ListingService {
     }
     const named = await withOfferNames(dto);
     const withDelivery = await withServiceDelivery(named, viewerId);
-    const [withStock] = await withEquipmentAvailability([withDelivery], viewerId);
-    const [withPhones] = await withDealContactPhones([withStock ?? withDelivery], viewerId);
-    return withOfferSentAt(withPhones ?? withStock ?? withDelivery, viewerId);
+    const withKind = await withEquipmentOfferKind(withDelivery, viewerId);
+    const [withStock] = await withEquipmentAvailability([withKind], viewerId);
+    const [withPhones] = await withDealContactPhones([withStock ?? withKind], viewerId);
+    return withOfferSentAt(withPhones ?? withStock ?? withKind, viewerId);
   }
 
   async submitOffer(
@@ -660,8 +686,9 @@ class ListingService {
           ? Math.min(Math.max(input.units ?? 1, 1), available)
           : undefined;
       if (
-        isSupplierEquipment(listing) &&
+        listing.category === 'equipment' &&
         listing.equipmentMode === 'both' &&
+        listing.requestMode !== 'auction' &&
         input.fulfillment !== 'rent' &&
         input.fulfillment !== 'sale'
       ) {
@@ -711,6 +738,17 @@ class ListingService {
             where: { listingId_responderId: { listingId: listing.id, responderId: viewerId } },
             create: { listingId: listing.id, responderId: viewerId, mode: input.delivery },
             update: { mode: input.delivery },
+          });
+        }
+        if (
+          listing.category === 'equipment' &&
+          listing.requestMode !== 'auction' &&
+          (input.fulfillment === 'rent' || input.fulfillment === 'sale')
+        ) {
+          await prisma.equipmentOfferChoice.upsert({
+            where: { listingId_responderId: { listingId: listing.id, responderId: viewerId } },
+            create: { listingId: listing.id, responderId: viewerId, kind: input.fulfillment },
+            update: { kind: input.fulfillment },
           });
         }
       }
@@ -988,6 +1026,14 @@ class ListingService {
           ErrorCode.VALIDATION_ERROR,
         );
       }
+      if (
+        listing.category === 'equipment' &&
+        listing.equipmentMode === 'both' &&
+        input.fulfillment !== 'rent' &&
+        input.fulfillment !== 'sale'
+      ) {
+        throw new AppError('Choose rent or sale for this offer', 400, ErrorCode.VALIDATION_ERROR);
+      }
       try {
         try {
           await rfqClient.updateOffer(listing.rfqId, offerId, viewerId, unitPrice);
@@ -996,6 +1042,9 @@ class ListingService {
             rfqId: listing.rfqId,
             responderId: viewerId,
             price: unitPrice,
+            ...(listing.category === 'equipment'
+              ? { offeredQuantity: Math.max(input.units ?? 1, 1) }
+              : {}),
           });
         }
       } catch (error) {
@@ -1011,6 +1060,16 @@ class ListingService {
           where: { listingId_responderId: { listingId: listing.id, responderId: viewerId } },
           create: { listingId: listing.id, responderId: viewerId, mode: input.delivery },
           update: { mode: input.delivery },
+        });
+      }
+      if (
+        listing.category === 'equipment' &&
+        (input.fulfillment === 'rent' || input.fulfillment === 'sale')
+      ) {
+        await prisma.equipmentOfferChoice.upsert({
+          where: { listingId_responderId: { listingId: listing.id, responderId: viewerId } },
+          create: { listingId: listing.id, responderId: viewerId, kind: input.fulfillment },
+          update: { kind: input.fulfillment },
         });
       }
       return this.getById(listing.id, viewerId);

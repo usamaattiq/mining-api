@@ -239,6 +239,7 @@ model Listing {
   conversations  Conversation[]
   equipmentHolds EquipmentHold[]
   serviceOfferChoices ServiceOfferChoice[]
+  equipmentOfferChoices EquipmentOfferChoice[]
   offerStamps ListingOfferStamp[]
 
   @@index([ownerId, category, createdAt])
@@ -275,6 +276,21 @@ model ListingReferenceCounter {
 enum ServiceDeliveryMode {
   onsite
   online
+}
+
+/** How a supplier offered on a buyer equipment request (rent or sale). */
+model EquipmentOfferChoice {
+  id          String            @id @default(uuid())
+  listingId   String
+  responderId String
+  kind        EquipmentDealKind
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([listingId, responderId])
+  @@map("equipment_offer_choices")
 }
 
 /** How a sender chose to deliver a service listed as both onsite and online. */
