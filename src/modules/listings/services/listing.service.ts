@@ -590,7 +590,7 @@ class ListingService {
       ? await auctionClient.listForParticipant(viewerId).catch(() => [])
       : [];
     const attachedAuctions = auctionSnapshots
-      .map(auctionSnapshotToRfq)
+      .map((snapshot) => auctionSnapshotToRfq(snapshot))
       .filter(snapshotHasAttachedOffer);
     const attached = snapshots.filter(snapshotHasAttachedOffer);
     const linked = [...attached, ...attachedAuctions];
@@ -1321,7 +1321,7 @@ async function auctionIdsForViewer(
     const snapshots = await auctionClient.listForParticipant(viewerId);
     return new Set(
       snapshots
-        .map(auctionSnapshotToRfq)
+        .map((snapshot) => auctionSnapshotToRfq(snapshot))
         .filter(keep)
         .map((snapshot) => snapshot.id),
     );
