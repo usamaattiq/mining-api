@@ -62,6 +62,8 @@ export type ListingRfqDto = {
   ownerPhone?: string;
   isLeading?: boolean;
   offers?: ListingRfqOfferDto[];
+  /** Every offer this viewer sent, including withdrawn, declined, and canceled. Owner `offers` stays the latest per responder. */
+  myOffers?: ListingRfqOfferDto[];
 };
 
 export type EquipmentListingDto = {

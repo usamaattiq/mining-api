@@ -239,6 +239,7 @@ export function toListingRfqDto(snapshot: RfqSnapshot): ListingRfqDto {
       : {}),
     ...(snapshot.is_leading ? { isLeading: true } : {}),
     ...(offers ? { offers } : {}),
+    ...(myOffers.length > 0 ? { myOffers } : {}),
   };
 }
 

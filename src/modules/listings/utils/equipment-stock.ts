@@ -8,6 +8,7 @@ const RESERVED = ['selected', 'active'] as const;
 const REQUEST_RESERVED = new Set(['selected', 'confirmed', 'completed']);
 const OPEN_OFFER = ['pending', 'selected', 'active'] as const;
 const VISIBLE_OFFER = ['pending', 'selected', 'active', 'declined'] as const;
+const SENDER_PAST_OFFER = ['withdrawn', 'rejected'] as const;
 
 export type EquipmentDealKind = 'rent' | 'sale';
 
@@ -183,7 +184,7 @@ export async function withEquipmentAvailability(
       : await prisma.equipmentHold.findMany({
           where: {
             listingId: { in: ids },
-            status: { in: [...VISIBLE_OFFER, 'returned'] },
+            status: { in: [...VISIBLE_OFFER, 'returned', ...SENDER_PAST_OFFER] },
           },
           include: { buyer: { select: { id: true, fullName: true } } },
           orderBy: { createdAt: 'desc' },
@@ -253,6 +254,10 @@ export async function withEquipmentAvailability(
       (hold) =>
         hold.listingId === listing.id && (VISIBLE_OFFER as readonly string[]).includes(hold.status),
     );
+    const mineAll = holds
+      .filter((hold) => hold.listingId === listing.id && hold.buyerId === viewerId)
+      .slice()
+      .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime());
     const localRfq: ListingRfqDto = {
       id: `equipment:${listing.id}`,
       status: 'live',
@@ -286,6 +291,26 @@ export async function withEquipmentAvailability(
         handover: hold.handover,
         createdAt: hold.createdAt.getTime(),
       })),
+      ...(mineAll.length > 0
+        ? {
+            myOffers: mineAll.map((hold) => ({
+              id: hold.offerId,
+              responderId: hold.buyerId,
+              responderName: hold.buyer.fullName,
+              status:
+                hold.status === 'returned'
+                  ? 'returned'
+                  : hold.status === 'rejected'
+                    ? 'canceled'
+                    : offerStatus(hold.status),
+              price: hold.price || undefined,
+              quantity: hold.units,
+              kind: hold.kind,
+              handover: hold.handover,
+              createdAt: hold.createdAt.getTime(),
+            })),
+          }
+        : {}),
     };
     return { ...listing, availableUnits: available, rfq: localRfq };
   });
