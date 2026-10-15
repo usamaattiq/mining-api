@@ -104,6 +104,89 @@ async function withOfferSentAt(listing: ListingDto, viewerId: string): Promise<L
   };
 }
 
+async function archiveSenderOffer(input: {
+  listingId: string;
+  offerId: string;
+  responderId: string;
+  status: 'withdrawn' | 'declined' | 'canceled';
+  price?: string;
+  quantity?: number;
+  kind?: string;
+  handover?: string;
+  delivery?: string;
+  sentAt?: Date;
+}): Promise<void> {
+  const sentAt = input.sentAt ?? new Date();
+  await prisma.$executeRaw`
+    INSERT INTO "sender_offer_archives"
+      ("id", "listingId", "offerId", "responderId", "status", "price", "quantity", "kind", "handover", "delivery", "sentAt", "createdAt", "updatedAt")
+    VALUES
+      (${crypto.randomUUID()}, ${input.listingId}, ${input.offerId}, ${input.responderId}, ${input.status}, ${input.price ?? ''}, ${input.quantity ?? null}, ${input.kind ?? null}, ${input.handover ?? null}, ${input.delivery ?? null}, ${sentAt}, NOW(), NOW())
+    ON CONFLICT ("listingId", "offerId") DO UPDATE SET
+      "status" = EXCLUDED."status",
+      "responderId" = EXCLUDED."responderId",
+      "price" = EXCLUDED."price",
+      "quantity" = EXCLUDED."quantity",
+      "kind" = EXCLUDED."kind",
+      "handover" = EXCLUDED."handover",
+      "delivery" = EXCLUDED."delivery",
+      "updatedAt" = NOW()
+  `;
+}
+
+async function withSenderOfferArchives(
+  listing: ListingDto,
+  viewerId: string | undefined,
+): Promise<ListingDto> {
+  if (!viewerId || !listing.rfq || listing.ownerId === viewerId) return listing;
+  const rows = await prisma.$queryRaw<
+    Array<{
+      offerId: string;
+      responderId: string;
+      status: string;
+      price: string;
+      quantity: number | null;
+      kind: string | null;
+      handover: string | null;
+      delivery: string | null;
+      sentAt: Date;
+    }>
+  >`
+    SELECT "offerId", "responderId", "status", "price", "quantity", "kind", "handover", "delivery", "sentAt"
+    FROM "sender_offer_archives"
+    WHERE "listingId" = ${listing.id} AND "responderId" = ${viewerId}
+    ORDER BY "sentAt" ASC
+  `;
+  if (rows.length === 0) return listing;
+  const past = new Set(['withdrawn', 'declined', 'canceled', 'cancelled', 'rejected']);
+  const merged = new Map((listing.rfq.myOffers ?? []).map((offer) => [offer.id, offer]));
+  for (const row of rows) {
+    const archived = {
+      id: row.offerId,
+      responderId: row.responderId,
+      responderName: '',
+      status: row.status === 'rejected' ? 'canceled' : row.status,
+      ...(row.price ? { price: row.price } : {}),
+      ...(row.quantity != null ? { quantity: row.quantity } : {}),
+      ...(row.kind === 'rent' || row.kind === 'sale' ? { kind: row.kind as 'rent' | 'sale' } : {}),
+      ...(row.handover === 'pickup' || row.handover === 'delivery'
+        ? { handover: row.handover as 'pickup' | 'delivery' }
+        : {}),
+      ...(row.delivery === 'onsite' || row.delivery === 'online'
+        ? { delivery: row.delivery as 'onsite' | 'online' }
+        : {}),
+      createdAt: row.sentAt.getTime(),
+    };
+    const live = merged.get(row.offerId);
+    if (!live) {
+      merged.set(row.offerId, archived);
+    } else if (!past.has(live.status)) {
+      merged.set(`${row.offerId}:past`, { ...archived, id: `${row.offerId}:past` });
+    }
+  }
+  return { ...listing, rfq: { ...listing.rfq, myOffers: [...merged.values()] } };
+}
+
 async function withEquipmentOfferKind(listing: ListingDto, viewerId: string): Promise<ListingDto> {
   if (listing.category !== 'equipment' || listing.postedAs !== 'buyer' || !listing.rfq) {
     return listing;
@@ -685,7 +768,11 @@ class ListingService {
     const withKind = await withEquipmentOfferKind(withDelivery, viewerId);
     const [withStock] = await withEquipmentAvailability([withKind], viewerId);
     const [withPhones] = await withDealContactPhones([withStock ?? withKind], viewerId);
-    return withOfferSentAt(withPhones ?? withStock ?? withKind, viewerId);
+    const withHistory = await withSenderOfferArchives(
+      withPhones ?? withStock ?? withKind,
+      viewerId,
+    );
+    return withOfferSentAt(withHistory, viewerId);
   }
 
   async submitOffer(
@@ -852,6 +939,13 @@ class ListingService {
     }
 
     let responderId: string | undefined;
+    let closedOffer:
+      | {
+          price?: string;
+          quantity?: number;
+          sentAt?: Date;
+        }
+      | undefined;
     try {
       if (listing.category === 'gold' || listing.requestMode === 'auction') {
         const snapshot = auctionSnapshotToRfq(
@@ -898,6 +992,15 @@ class ListingService {
           (row) => String(row.id) === offerId,
         );
         responderId = offer ? String(offer.responder_id ?? offer.responderId ?? '') : undefined;
+        if (offer && (action === 'withdraw' || action === 'decline' || action === 'reject')) {
+          const quantity = Number(offer.offered_quantity);
+          const sentAt = offer.created_at ? new Date(offer.created_at) : undefined;
+          closedOffer = {
+            ...(offer.price != null ? { price: String(offer.price) } : {}),
+            ...(Number.isFinite(quantity) ? { quantity } : {}),
+            ...(sentAt && Number.isFinite(sentAt.getTime()) ? { sentAt } : {}),
+          };
+        }
         if (buyerEquipmentRequest && (action === 'select' || action === 'confirm')) {
           const accepting = Math.max(Number(offer?.offered_quantity) || 1, 1);
           const alreadyFilled = (snapshot.offers ?? [])
@@ -936,6 +1039,32 @@ class ListingService {
     } catch (error) {
       if (error instanceof AppError) throw error;
       mapRfqError(error, `Could not ${action} offer`);
+    }
+
+    if (action === 'withdraw' || action === 'decline' || action === 'reject') {
+      const senderId = action === 'reject' ? responderId : (responderId ?? viewerId);
+      if (senderId) {
+        const [equipmentChoice, serviceChoice] = await Promise.all([
+          prisma.equipmentOfferChoice.findUnique({
+            where: { listingId_responderId: { listingId: listing.id, responderId: senderId } },
+          }),
+          prisma.serviceOfferChoice.findUnique({
+            where: { listingId_responderId: { listingId: listing.id, responderId: senderId } },
+          }),
+        ]);
+        await archiveSenderOffer({
+          listingId: listing.id,
+          offerId,
+          responderId: senderId,
+          status:
+            action === 'withdraw' ? 'withdrawn' : action === 'decline' ? 'declined' : 'canceled',
+          price: closedOffer?.price,
+          quantity: closedOffer?.quantity,
+          sentAt: closedOffer?.sentAt,
+          kind: equipmentChoice?.kind,
+          delivery: serviceChoice?.mode,
+        });
+      }
     }
 
     if (action === 'select' && responderId) {

@@ -244,6 +244,7 @@ model Listing {
   serviceOfferChoices ServiceOfferChoice[]
   equipmentOfferChoices EquipmentOfferChoice[]
   offerStamps ListingOfferStamp[]
+  senderOfferArchives SenderOfferArchive[]
 
   @@index([ownerId, category, createdAt])
   @@index([postedAs, category, createdAt])
@@ -320,6 +321,29 @@ model ServiceOfferChoice {
 
   @@unique([listingId, responderId])
   @@map("service_offer_choices")
+}
+
+/** Past sender offers the remote RFQ drops after withdraw, decline, or cancel. */
+model SenderOfferArchive {
+  id          String   @id @default(uuid())
+  listingId   String
+  offerId     String
+  responderId String
+  status      String
+  price       String   @default("")
+  quantity    Int?
+  kind        String?
+  handover    String?
+  delivery    String?
+  sentAt      DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([listingId, offerId])
+  @@index([listingId, responderId])
+  @@map("sender_offer_archives")
 }
 
 /** When a supplier sent an offer. Kept here so the tile can show the date even if the remote offer has none. */
