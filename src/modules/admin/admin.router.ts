@@ -12,7 +12,12 @@ import { userSessionRepository } from '../auth/repositories/user-session.reposit
 import { toListingDto } from '../listings/utils/listing.mapper';
 import { attachRfqStatuses } from '../listings/utils/listing-rfq';
 import { requireAdmin } from './require-admin';
-import { messageOnSendEnabled, setMessageOnSend } from './app-settings';
+import {
+  buyerEquipmentRequestModes,
+  messageOnSendEnabled,
+  setBuyerEquipmentRequestMode,
+  setMessageOnSend,
+} from './app-settings';
 import {
   createCategoryBodySchema,
   listingStatusBodySchema,
@@ -48,18 +53,45 @@ function pageOf(value: unknown): number {
 adminRouter.get(
   '/settings',
   wrap(async (_req, res) => {
-    sendSuccess(res, 200, { messageOnSend: await messageOnSendEnabled() });
+    const modes = await buyerEquipmentRequestModes();
+    sendSuccess(res, 200, {
+      messageOnSend: await messageOnSendEnabled(),
+      buyerEquipmentRfq: modes.rfq,
+      buyerEquipmentAuction: modes.auction,
+    });
   }),
 );
 
 adminRouter.patch(
   '/settings',
   wrap(async (req, res) => {
-    const enabled = (req.body as { messageOnSend?: unknown }).messageOnSend;
-    if (typeof enabled !== 'boolean') {
-      throw new AppError('messageOnSend is required', 400, ErrorCode.VALIDATION_ERROR);
+    const body = req.body as {
+      messageOnSend?: unknown;
+      buyerEquipmentRfq?: unknown;
+      buyerEquipmentAuction?: unknown;
+    };
+    if (typeof body.messageOnSend === 'boolean') {
+      await setMessageOnSend(body.messageOnSend);
     }
-    sendSuccess(res, 200, { messageOnSend: await setMessageOnSend(enabled) });
+    if (typeof body.buyerEquipmentRfq === 'boolean') {
+      await setBuyerEquipmentRequestMode('rfq', body.buyerEquipmentRfq);
+    }
+    if (typeof body.buyerEquipmentAuction === 'boolean') {
+      await setBuyerEquipmentRequestMode('auction', body.buyerEquipmentAuction);
+    }
+    if (
+      typeof body.messageOnSend !== 'boolean' &&
+      typeof body.buyerEquipmentRfq !== 'boolean' &&
+      typeof body.buyerEquipmentAuction !== 'boolean'
+    ) {
+      throw new AppError('A setting value is required', 400, ErrorCode.VALIDATION_ERROR);
+    }
+    const modes = await buyerEquipmentRequestModes();
+    sendSuccess(res, 200, {
+      messageOnSend: await messageOnSendEnabled(),
+      buyerEquipmentRfq: modes.rfq,
+      buyerEquipmentAuction: modes.auction,
+    });
   }),
 );
 

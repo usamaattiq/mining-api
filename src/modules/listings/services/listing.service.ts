@@ -3,6 +3,7 @@ import { prisma } from '../../../common/database/prisma';
 import { runInTransaction, runSerializable } from '../../../common/database/transaction';
 import { AppError } from '../../../common/errors/app-error';
 import { ErrorCode } from '../../../common/errors/error-codes';
+import { buyerEquipmentRequestModes } from '../../admin/app-settings';
 import { auctionClient } from '../../../integrations/auction/auction.client';
 import { rfqClient, RfqApiError } from '../../../integrations/rfq/rfq.client';
 import { inboxRepository } from '../../notifications/repositories/inbox.repository';
@@ -370,6 +371,14 @@ class ListingService {
         input.postedAs === 'buyer' &&
         input.requestMode === 'auction');
     const supplierEquipment = input.category === 'equipment' && input.postedAs === 'supplier';
+    const buyerEquipment = input.category === 'equipment' && input.postedAs === 'buyer';
+    if (buyerEquipment) {
+      const modes = await buyerEquipmentRequestModes();
+      const allowed = input.requestMode === 'auction' ? modes.auction : modes.rfq;
+      if (!allowed) {
+        throw new AppError('This request type is turned off', 400, ErrorCode.VALIDATION_ERROR);
+      }
+    }
     const usesRfq = !usesAuction && !supplierEquipment;
     if (usesAuction && !(await auctionClient.isReachable())) {
       throw new AppError('Auction service is down', 503, ErrorCode.INTERNAL_ERROR);
@@ -469,6 +478,17 @@ class ListingService {
     }
     if (listing.category !== input.category) {
       throw new AppError('Listing category cannot be changed', 400, ErrorCode.VALIDATION_ERROR);
+    }
+    if (
+      listing.category === 'equipment' &&
+      listing.postedAs === 'buyer' &&
+      input.requestMode !== listing.requestMode
+    ) {
+      const modes = await buyerEquipmentRequestModes();
+      const allowed = input.requestMode === 'auction' ? modes.auction : modes.rfq;
+      if (!allowed) {
+        throw new AppError('This request type is turned off', 400, ErrorCode.VALIDATION_ERROR);
+      }
     }
 
     if (
