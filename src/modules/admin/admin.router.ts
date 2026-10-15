@@ -1,5 +1,11 @@
 import { Router } from 'express';
-import { AccountType, ListingCategory, ListingStatus, UserStatus } from '@prisma/client';
+import {
+  AccountType,
+  ListingCategory,
+  ListingStatus,
+  MarketplaceRole,
+  UserStatus,
+} from '@prisma/client';
 import { prisma } from '../../common/database/prisma';
 import { AppError } from '../../common/errors/app-error';
 import { ErrorCode } from '../../common/errors/error-codes';
@@ -275,9 +281,14 @@ adminRouter.get(
       req.query.category === 'gold'
         ? (req.query.category as ListingCategory)
         : undefined;
+    const postedAs =
+      req.query.postedAs === 'buyer' || req.query.postedAs === 'supplier'
+        ? (req.query.postedAs as MarketplaceRole)
+        : undefined;
     const where = {
       status: ListingStatus.ACTIVE,
       ...(category ? { category } : {}),
+      ...(postedAs ? { postedAs } : {}),
       AND: [
         ...(search
           ? [
@@ -292,15 +303,22 @@ adminRouter.get(
           : []),
       ],
     };
-    const rows = await prisma.listing.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-      include: {
-        media: { orderBy: { sortOrder: 'asc' } },
-        owner: { select: { id: true, fullName: true, avatarUrl: true } },
-      },
-    });
+    const pageSize = 7;
+    const page = Math.max(1, Number.parseInt(String(req.query.page ?? '1'), 10) || 1);
+    const skip = (page - 1) * pageSize;
+    const [total, rows] = await Promise.all([
+      prisma.listing.count({ where }),
+      prisma.listing.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: pageSize,
+        include: {
+          media: { orderBy: { sortOrder: 'asc' } },
+          owner: { select: { id: true, fullName: true, avatarUrl: true } },
+        },
+      }),
+    ]);
     const dtos = rows.map(toListingDto);
     const byOwner = new Map<string, { dtos: typeof dtos; rows: typeof rows }>();
     rows.forEach((row, index) => {
@@ -316,7 +334,13 @@ adminRouter.get(
         for (const item of attached) withStatus.set(item.id, item);
       }),
     );
-    sendSuccess(res, 200, { items: dtos.map((item) => withStatus.get(item.id) ?? item) });
+    sendSuccess(res, 200, {
+      items: dtos.map((item) => withStatus.get(item.id) ?? item),
+      page,
+      pageSize,
+      total,
+      hasMore: skip + rows.length < total,
+    });
   }),
 );
 
