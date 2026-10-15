@@ -53,6 +53,8 @@ export function toListingDto(listing: ListingWithMedia): ListingDto {
       deliveryAvailable: listing.deliveryAvailable ?? false,
       deliveryType: listing.deliveryType ?? 'free',
       deliveryPricePerKm: listing.deliveryPricePerKm ?? '',
+      unitLabel: listing.unitLabel ?? '',
+      unitPrice: listing.unitPrice ?? '',
       postedAs: listing.postedAs,
       requestMode: listing.requestMode === 'auction' ? 'auction' : 'rfq',
       auctionEndDate: listing.auctionEndDate ? listing.auctionEndDate.getTime() : null,

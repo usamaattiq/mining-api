@@ -283,6 +283,8 @@ function listingCreateData(
       deliveryAvailable: input.deliveryAvailable,
       deliveryType: input.deliveryType,
       deliveryPricePerKm: input.deliveryPricePerKm,
+      unitLabel: input.unitLabel || null,
+      unitPrice: input.unitPrice || null,
       postedAs: input.postedAs,
       requestMode: input.postedAs === 'buyer' ? input.requestMode : 'rfq',
       auctionEndDate:

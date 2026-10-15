@@ -39,8 +39,16 @@ export const updateCategoryBodySchema = z.object({
   }),
 });
 
+export const unitBodySchema = z.object({
+  body: z.object({
+    name: z.string().trim().min(1).max(150),
+    nameAr: z.string().trim().min(1).max(150),
+  }),
+});
+
 export type UpdateUserBody = z.infer<typeof updateUserBodySchema>['body'];
 export type UserStatusBody = z.infer<typeof userStatusBodySchema>['body'];
 export type ListingStatusBody = z.infer<typeof listingStatusBodySchema>['body'];
 export type CreateCategoryBody = z.infer<typeof createCategoryBodySchema>['body'];
 export type UpdateCategoryBody = z.infer<typeof updateCategoryBodySchema>['body'];
+export type UnitBody = z.infer<typeof unitBodySchema>['body'];

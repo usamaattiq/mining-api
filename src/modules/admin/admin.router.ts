@@ -17,11 +17,13 @@ import {
   createCategoryBodySchema,
   listingStatusBodySchema,
   updateCategoryBodySchema,
+  unitBodySchema,
   updateUserBodySchema,
   userStatusBodySchema,
   type CreateCategoryBody,
   type ListingStatusBody,
   type UpdateCategoryBody,
+  type UnitBody,
   type UpdateUserBody,
   type UserStatusBody,
 } from './validation/admin.schema';
@@ -408,5 +410,52 @@ adminRouter.delete(
     }
     await prisma.catalogLabel.delete({ where: { id: label.id } });
     sendSuccess(res, 200, { id: label.id });
+  }),
+);
+
+adminRouter.get(
+  '/units',
+  wrap(async (_req, res) => {
+    const rows = await prisma.unitLabel.findMany({ orderBy: { name: 'asc' } });
+    sendSuccess(res, 200, {
+      items: rows.map((row) => ({ id: row.id, name: row.name, nameAr: row.nameAr })),
+    });
+  }),
+);
+
+adminRouter.post(
+  '/units',
+  validate(unitBodySchema),
+  wrap(async (req, res) => {
+    const body = req.validatedBody as UnitBody;
+    const created = await prisma.unitLabel.create({
+      data: { name: body.name, nameAr: body.nameAr },
+    });
+    sendSuccess(res, 201, { id: created.id, name: created.name, nameAr: created.nameAr });
+  }),
+);
+
+adminRouter.patch(
+  '/units/:id',
+  validate(unitBodySchema),
+  wrap(async (req, res) => {
+    const body = req.validatedBody as UnitBody;
+    const existing = await prisma.unitLabel.findUnique({ where: { id: routeId(req.params.id) } });
+    if (!existing) throw new AppError('Unit not found', 404, ErrorCode.NOT_FOUND);
+    const updated = await prisma.unitLabel.update({
+      where: { id: existing.id },
+      data: { name: body.name, nameAr: body.nameAr },
+    });
+    sendSuccess(res, 200, { id: updated.id, name: updated.name, nameAr: updated.nameAr });
+  }),
+);
+
+adminRouter.delete(
+  '/units/:id',
+  wrap(async (req, res) => {
+    const existing = await prisma.unitLabel.findUnique({ where: { id: routeId(req.params.id) } });
+    if (!existing) throw new AppError('Unit not found', 404, ErrorCode.NOT_FOUND);
+    await prisma.unitLabel.delete({ where: { id: existing.id } });
+    sendSuccess(res, 200, { id: existing.id });
   }),
 );

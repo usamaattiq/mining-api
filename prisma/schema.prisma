@@ -210,6 +210,9 @@ model Listing {
   deliveryAvailable    Boolean?
   deliveryType         DeliveryType?
   deliveryPricePerKm   String?
+  /** Optional buyer request pricing unit, for example hourly or per foot. */
+  unitLabel            String?
+  unitPrice            String?
 
   serviceType            ServiceListingType?
   serviceCategoryLabel   String?
@@ -262,6 +265,17 @@ model CatalogLabel {
   @@unique([category, name])
   @@index([parentId])
   @@map("catalog_labels")
+}
+
+/** Admin-managed pricing units such as hourly or per foot. */
+model UnitLabel {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  nameAr    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("unit_labels")
 }
 
 model ListingReferenceCounter {

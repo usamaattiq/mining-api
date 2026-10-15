@@ -72,6 +72,16 @@ listingsRouter.get(
   }),
 );
 
+listingsRouter.get(
+  '/units',
+  wrap(async (_req, res) => {
+    const rows = await prisma.unitLabel.findMany({ orderBy: { name: 'asc' } });
+    sendSuccess(res, 200, {
+      items: rows.map((row) => ({ id: row.id, name: row.name, nameAr: row.nameAr })),
+    });
+  }),
+);
+
 listingsRouter.post(
   '/',
   validate(createListingBodySchema),
