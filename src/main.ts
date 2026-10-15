@@ -14,6 +14,7 @@ import { adminRouter } from './modules/admin/admin.router';
 import { listingsRouter } from './modules/listings/listings.router';
 import { messagesRouter } from './modules/messages/messages.router';
 import { uploadsRouter } from './modules/uploads/uploads.router';
+import { listingOpenRouter } from './modules/listings/routes/listing-open.route';
 import { initChatSocket } from './realtime/chat.socket';
 import { startAuctionConfirmationTimeoutJob } from './modules/listings/jobs/auction-confirmation-timeout';
 
@@ -38,6 +39,7 @@ app.use('/api/admin', adminRouter);
 app.use('/api/messages', messagesRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/uploads', uploadsRouter);
+app.use('/open', listingOpenRouter);
 
 app.use((_req: Request, res: Response) => {
   res
