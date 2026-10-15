@@ -1,3 +1,4 @@
+import { mapWithLimit } from '../../common/async/map-with-limit';
 import { env } from '../../config/env';
 import type {
   CreateRfqInput,
@@ -120,16 +121,14 @@ class RfqClient {
 
   async getSnapshots(rfqIds: string[], viewerId: string): Promise<Map<string, RfqSnapshot>> {
     const unique = [...new Set(rfqIds.filter(Boolean))];
-    const results = await Promise.all(
-      unique.map(async (id) => {
-        try {
-          const snapshot = await this.getSnapshot(id, viewerId);
-          return [id, snapshot] as const;
-        } catch {
-          return null;
-        }
-      }),
-    );
+    const results = await mapWithLimit(unique, 5, async (id) => {
+      try {
+        const snapshot = await this.getSnapshot(id, viewerId);
+        return [id, snapshot] as const;
+      } catch {
+        return null;
+      }
+    });
 
     const map = new Map<string, RfqSnapshot>();
     for (const row of results) {

@@ -128,7 +128,7 @@ class ListingRepository {
         ...(input.category ? { category: input.category } : {}),
       },
       include: {
-        media: { orderBy: { sortOrder: 'asc' }, take: 6 },
+        media: { orderBy: { sortOrder: 'asc' }, take: 1 },
         owner: { select: { id: true, fullName: true, avatarUrl: true } },
       },
       orderBy: { createdAt: 'desc' },

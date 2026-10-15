@@ -1,3 +1,4 @@
+import { mapWithLimit } from '../../../common/async/map-with-limit';
 import { logger } from '../../../common/logger';
 import { auctionClient } from '../../../integrations/auction/auction.client';
 import type { AuctionBid, AuctionSnapshot } from '../../../integrations/auction/auction.types';
@@ -273,6 +274,8 @@ export async function attachRfqStatuses(
     loadAuctionSnapshots(goldIds, viewerId),
   ]);
 
+  const rowById = new Map(rows.map((row) => [row.id, row]));
+
   return listings.map((listing) => {
     const remoteId = byListingId.get(listing.id);
     if (!remoteId) return listing;
@@ -287,7 +290,7 @@ export async function attachRfqStatuses(
       next.rfq && next.rfq.myOfferCreatedAt == null && mine?.createdAt != null
         ? { ...next, rfq: { ...next.rfq, myOfferCreatedAt: mine.createdAt } }
         : next;
-    const row = rows.find((item) => item.id === listing.id);
+    const row = rowById.get(listing.id);
     const selectedAt = row?.auctionOfferSelectedAt?.getTime();
     const ownerViewing = Boolean(row && row.ownerId === viewerId);
     const awaiting =
@@ -317,19 +320,17 @@ async function loadAuctionSnapshots(
 ): Promise<Map<string, RfqSnapshot>> {
   const map = new Map<string, RfqSnapshot>();
   if (!auctionClient.isConfigured() || auctionIds.length === 0) return map;
-  const rows = await Promise.all(
-    [...new Set(auctionIds)].map(async (id) => {
-      try {
-        const [snapshot, bidList] = await Promise.all([
-          auctionClient.getSnapshot(id, viewerId),
-          auctionClient.listBids(id, viewerId).catch(() => ({ bids: [] })),
-        ]);
-        return [id, auctionSnapshotToRfq(snapshot, bidList.bids)] as const;
-      } catch {
-        return null;
-      }
-    }),
-  );
+  const rows = await mapWithLimit([...new Set(auctionIds)], 5, async (id) => {
+    try {
+      const [snapshot, bidList] = await Promise.all([
+        auctionClient.getSnapshot(id, viewerId),
+        auctionClient.listBids(id, viewerId).catch(() => ({ bids: [] })),
+      ]);
+      return [id, auctionSnapshotToRfq(snapshot, bidList.bids)] as const;
+    } catch {
+      return null;
+    }
+  });
   for (const row of rows) {
     if (row) map.set(row[0], row[1]);
   }

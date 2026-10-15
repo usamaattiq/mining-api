@@ -722,7 +722,12 @@ class ListingService {
         if (buyerRequestStillOpen) return true;
         return listing.rfq.status === 'live';
       })
-      .sort((a, b) => Number(viewerOpen(b)) - Number(viewerOpen(a)));
+      .sort((a, b) => Number(viewerOpen(b)) - Number(viewerOpen(a)))
+      .map((listing) => {
+        if (!('rfq' in listing) || !listing.rfq) return listing;
+        const { offers: _offers, myOffers: _myOffers, ...rfq } = listing.rfq;
+        return { ...listing, rfq };
+      });
   }
 
   async listMyOffers(viewerId: string): Promise<ListingDto[]> {
