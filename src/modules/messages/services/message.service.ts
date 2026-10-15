@@ -14,6 +14,24 @@ import { auctionClient } from '../../../integrations/auction/auction.client';
 import { auctionSnapshotToRfq } from '../../listings/utils/listing-rfq';
 import { rfqClient } from '../../../integrations/rfq/rfq.client';
 
+async function buyerHasSentOffer(
+  category: string,
+  rfqId: string,
+  ownerId: string,
+  buyerId: string,
+): Promise<boolean> {
+  const snapshot =
+    category === 'gold'
+      ? auctionSnapshotToRfq(await auctionClient.getSnapshot(rfqId, ownerId))
+      : await rfqClient.getSnapshot(rfqId, ownerId);
+  return (snapshot.offers ?? []).some((offer) => {
+    const responderId = String(offer.responder_id ?? offer.responderId ?? '');
+    if (responderId !== buyerId) return false;
+    if (category === 'gold') return true;
+    return offer.status === 'active' || offer.status === 'selected' || offer.status === 'confirmed';
+  });
+}
+
 function assertParticipant(buyerId: string, sellerId: string, userId: string): void {
   if (buyerId !== userId && sellerId !== userId) {
     throw new AppError('Forbidden', 403, ErrorCode.FORBIDDEN);
@@ -57,33 +75,26 @@ class MessageService {
         const hold = await prisma.equipmentHold.findFirst({
           where: { listingId, buyerId, status: { in: ['selected', 'active'] } },
         });
-        if (!hold) {
-          throw new AppError(
-            'Messaging opens after the offer is confirmed',
-            403,
-            ErrorCode.FORBIDDEN,
-          );
+        const offerOpen =
+          hold != null ||
+          (listing.rfqId
+            ? await buyerHasSentOffer(listing.category, listing.rfqId, userId, buyerId)
+            : false);
+        if (!offerOpen) {
+          throw new AppError('Messaging opens after an offer is sent', 403, ErrorCode.FORBIDDEN);
         }
       } else {
         if (!listing.rfqId) {
           throw new AppError('Cannot message your own listing', 400, ErrorCode.VALIDATION_ERROR);
         }
-        const snapshot =
-          listing.category === 'gold'
-            ? auctionSnapshotToRfq(await auctionClient.getSnapshot(listing.rfqId, userId))
-            : await rfqClient.getSnapshot(listing.rfqId, userId);
-        const canMessage = (snapshot.offers ?? []).some((offer) => {
-          const responderId = String(offer.responder_id ?? offer.responderId ?? '');
-          if (responderId !== buyerId) return false;
-          if (listing.category === 'gold') return true;
-          return offer.status === 'selected' || offer.status === 'confirmed';
-        });
+        const canMessage = await buyerHasSentOffer(
+          listing.category,
+          listing.rfqId,
+          userId,
+          buyerId,
+        );
         if (!canMessage) {
-          throw new AppError(
-            'Messaging opens after the offer is confirmed',
-            403,
-            ErrorCode.FORBIDDEN,
-          );
+          throw new AppError('Messaging opens after an offer is sent', 403, ErrorCode.FORBIDDEN);
         }
       }
       const existing = await conversationRepository.findByListingAndBuyer(listingId, buyerId);
