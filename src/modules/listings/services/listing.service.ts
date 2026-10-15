@@ -242,7 +242,10 @@ function reservedRequestUnits(
   offers: { status?: string; offered_quantity?: number | string | null }[] | undefined,
 ): number {
   return (offers ?? [])
-    .filter((offer) => String(offer.status) === 'confirmed')
+    .filter((offer) => {
+      const status = String(offer.status);
+      return status === 'selected' || status === 'confirmed' || status === 'completed';
+    })
     .reduce((sum, offer) => sum + Math.max(Number(offer.offered_quantity) || 1, 1), 0);
 }
 
@@ -580,8 +583,17 @@ class ListingService {
     return listings
       .filter((listing) => {
         if (!('rfq' in listing) || !listing.rfq) return false;
-        if (viewerSettled(listing)) return false;
+        const buyerRequestStillOpen =
+          listing.category === 'equipment' &&
+          listing.postedAs === 'buyer' &&
+          listing.requestMode !== 'auction' &&
+          (listing.availableUnits ?? 0) > 0 &&
+          listing.rfq.status !== 'expired' &&
+          listing.rfq.status !== 'closed' &&
+          listing.rfq.status !== 'completed';
+        if (viewerSettled(listing) && !buyerRequestStillOpen) return false;
         if (viewerOpen(listing)) return true;
+        if (buyerRequestStillOpen) return true;
         return listing.rfq.status === 'live';
       })
       .sort((a, b) => Number(viewerOpen(b)) - Number(viewerOpen(a)));
@@ -854,13 +866,18 @@ class ListingService {
           }
         }
       } else {
-        const snapshot = await rfqClient.getSnapshot(listing.rfqId, viewerId);
+        const buyerEquipmentRequest =
+          listing.category === 'equipment' &&
+          listing.postedAs === 'buyer' &&
+          listing.requestMode !== 'auction';
+        const snapshot = await rfqClient.getSnapshot(
+          listing.rfqId,
+          buyerEquipmentRequest ? listing.ownerId : viewerId,
+        );
         const offer = [...(snapshot.offers ?? []), ...(snapshot.my_offers ?? [])].find(
           (row) => String(row.id) === offerId,
         );
         responderId = offer ? String(offer.responder_id ?? offer.responderId ?? '') : undefined;
-        const buyerEquipmentRequest =
-          listing.category === 'equipment' && listing.postedAs === 'buyer';
         if (buyerEquipmentRequest && (action === 'select' || action === 'confirm')) {
           const accepting = Math.max(Number(offer?.offered_quantity) || 1, 1);
           const alreadyFilled = (snapshot.offers ?? [])

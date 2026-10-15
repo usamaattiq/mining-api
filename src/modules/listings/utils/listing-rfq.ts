@@ -367,7 +367,7 @@ export async function createListingRfq(
       ownerId: listing.ownerId,
       listingId: listing.id,
       totalQuantity: listing.category === 'equipment' ? Math.max(listing.units ?? 1, 1) : 1,
-      enforceCapacityLimit: false,
+      enforceCapacityLimit: listing.category === 'equipment' && listing.postedAs === 'buyer',
       expiryHours:
         listing.category === 'equipment' && listing.postedAs === 'supplier'
           ? 8760

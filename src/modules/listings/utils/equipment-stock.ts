@@ -5,7 +5,7 @@ import type { RfqOfferSummary } from '../../../integrations/rfq/rfq.types';
 import type { EquipmentListingDto, ListingDto, ListingRfqDto } from '../types/listing.types';
 
 const RESERVED = ['selected', 'active'] as const;
-const REQUEST_RESERVED = new Set(['active', 'pending', 'selected', 'confirmed']);
+const REQUEST_RESERVED = new Set(['selected', 'confirmed', 'completed']);
 const OPEN_OFFER = ['pending', 'selected', 'active'] as const;
 const VISIBLE_OFFER = ['pending', 'selected', 'active', 'declined'] as const;
 
@@ -24,10 +24,24 @@ export function confirmedOfferUnits(
 }
 
 /** Confirmed units are only listed on the owner's RFQ snapshot, not on another supplier's. */
-export async function confirmedUnitsForBuyerRequests(
+const HOLDING_OFFER = new Set(['selected', 'confirmed', 'completed']);
+
+function holdingOfferUnits(
+  offers: Array<RfqOfferSummary | { status?: string; quantity?: number }> | undefined,
+): number {
+  return (offers ?? [])
+    .filter((offer) => HOLDING_OFFER.has(String(offer.status ?? '')))
+    .reduce((sum, offer) => {
+      const raw = 'offered_quantity' in offer ? offer.offered_quantity : undefined;
+      const quantity = raw ?? ('quantity' in offer ? offer.quantity : undefined);
+      return sum + Math.max(Number(quantity) || 1, 1);
+    }, 0);
+}
+
+export async function buyerRequestUnitProgress(
   listings: ListingDto[],
-): Promise<Map<string, number>> {
-  const filled = new Map<string, number>();
+): Promise<Map<string, { filled: number; reserved: number }>> {
+  const progress = new Map<string, { filled: number; reserved: number }>();
   const requests = listings.filter(
     (listing): listing is EquipmentListingDto =>
       listing.category === 'equipment' &&
@@ -41,15 +55,20 @@ export async function confirmedUnitsForBuyerRequests(
       if (!rfqId) return;
       try {
         const snapshot = await rfqClient.getSnapshot(rfqId, listing.ownerId);
-        const fromOwner = confirmedOfferUnits(snapshot.offers);
-        const fromViewer = confirmedOfferUnits(listing.rfq?.offers);
-        filled.set(listing.id, Math.max(fromOwner, fromViewer));
+        const offers = snapshot.offers ?? [];
+        progress.set(listing.id, {
+          filled: Math.max(confirmedOfferUnits(offers), confirmedOfferUnits(listing.rfq?.offers)),
+          reserved: Math.max(holdingOfferUnits(offers), holdingOfferUnits(listing.rfq?.offers)),
+        });
       } catch {
-        filled.set(listing.id, confirmedOfferUnits(listing.rfq?.offers));
+        progress.set(listing.id, {
+          filled: confirmedOfferUnits(listing.rfq?.offers),
+          reserved: holdingOfferUnits(listing.rfq?.offers),
+        });
       }
     }),
   );
-  return filled;
+  return progress;
 }
 
 export function buyerRequestUnitSplit(listing: {
@@ -61,13 +80,13 @@ export function buyerRequestUnitSplit(listing: {
   for (const offer of listing.rfq?.offers ?? []) {
     const units = Math.max(offer.quantity ?? 1, 1);
     if (REQUEST_RESERVED.has(offer.status)) reserved += units;
-    if (offer.status === 'confirmed') filled += units;
+    if (offer.status === 'confirmed' || offer.status === 'completed') filled += units;
   }
   const total = Math.max(listing.units, 1);
   return {
     reserved,
     filled,
-    available: Math.max(0, total - filled),
+    available: Math.max(0, total - reserved),
   };
 }
 
@@ -169,29 +188,51 @@ export async function withEquipmentAvailability(
           include: { buyer: { select: { id: true, fullName: true } } },
           orderBy: { createdAt: 'desc' },
         });
-  const confirmedByListing = await confirmedUnitsForBuyerRequests(listings);
+  const unitProgress = await buyerRequestUnitProgress(listings);
   return listings.map((listing) => {
     if (listing.category !== 'equipment') return listing;
     const available = Math.max(0, listing.units - (reserved.get(listing.id) ?? 0));
     if (!isSupplierEquipment(listing)) {
       if (listing.postedAs === 'buyer' && listing.requestMode !== 'auction' && listing.rfq) {
-        const filled = confirmedByListing.get(listing.id) ?? buyerRequestUnitSplit(listing).filled;
-        const remaining = Math.max(0, listing.units - filled);
-        const done = filled >= listing.units;
+        const progress = unitProgress.get(listing.id);
+        const split = buyerRequestUnitSplit(listing);
+        const filled = progress?.filled ?? split.filled;
+        const reservedUnits = Math.max(progress?.reserved ?? split.reserved, filled);
+        const total = Math.max(listing.units, 1);
+        const remaining = Math.max(0, total - reservedUnits);
+        const done = filled >= total;
+        const remoteStatus = listing.rfq.status;
+        const endedByTime = remoteStatus === 'expired' || remoteStatus === 'closed';
+        const viewerConfirming = remoteStatus === 'awaiting-your-confirmation';
         return {
           ...listing,
           availableUnits: remaining,
           rfq: {
             ...listing.rfq,
-            canSubmitOffer: remaining > 0 && listing.rfq.canSubmitOffer !== false,
-            ...(done
+            ...(endedByTime
               ? {
-                  status: 'completed',
-                  statusLabel: 'Completed',
-                  statusVariant: 'muted' as const,
                   canSubmitOffer: false,
+                  canDecideOffers: false,
                 }
-              : {}),
+              : done
+                ? {
+                    status: 'completed',
+                    statusLabel: 'Completed',
+                    statusVariant: 'muted' as const,
+                    canSubmitOffer: false,
+                    canDecideOffers: false,
+                  }
+                : {
+                    ...(viewerConfirming
+                      ? {}
+                      : {
+                          status: 'live' as const,
+                          statusLabel: 'Live',
+                          statusVariant: 'accent' as const,
+                        }),
+                    canSubmitOffer: remaining > 0 && !viewerConfirming,
+                    canDecideOffers: !viewerConfirming,
+                  }),
           },
         };
       }
