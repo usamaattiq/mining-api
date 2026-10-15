@@ -86,8 +86,6 @@ export type EquipmentListingDto = {
   deliveryAvailable: boolean;
   deliveryType: 'free' | 'perKm';
   deliveryPricePerKm: string;
-  unitLabel: string;
-  unitPrice: string;
   postedAs: 'buyer' | 'supplier';
   requestMode: 'rfq' | 'auction';
   auctionEndDate: number | null;
@@ -110,6 +108,8 @@ export type ServiceListingDto = {
   price: string;
   onsitePrice: string;
   onlinePrice: string;
+  unitLabel: string;
+  unitPrice: string;
   serviceDate: number | null;
   location: string;
   media: ListingMediaDto[];

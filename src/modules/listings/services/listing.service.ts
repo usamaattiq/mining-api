@@ -283,8 +283,6 @@ function listingCreateData(
       deliveryAvailable: input.deliveryAvailable,
       deliveryType: input.deliveryType,
       deliveryPricePerKm: input.deliveryPricePerKm,
-      unitLabel: input.unitLabel || null,
-      unitPrice: input.unitPrice || null,
       postedAs: input.postedAs,
       requestMode: input.postedAs === 'buyer' ? input.requestMode : 'rfq',
       auctionEndDate:
@@ -313,6 +311,8 @@ function listingCreateData(
       price: onsitePrice || onlinePrice,
       onsitePrice,
       onlinePrice,
+      unitLabel: input.unitLabel || null,
+      unitPrice: input.unitPrice || null,
       serviceDate: epochToDate(input.serviceDate),
       postedAs: input.postedAs,
       media,
