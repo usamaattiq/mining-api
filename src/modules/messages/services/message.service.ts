@@ -11,6 +11,7 @@ import type { ConversationDto } from '../types/message.types';
 import { toConversationDto } from '../utils/conversation.mapper';
 import { emitChatMessage, emitChatRead } from '../../../realtime/chat.emitter';
 import { auctionClient } from '../../../integrations/auction/auction.client';
+import { rfqClient } from '../../../integrations/rfq/rfq.client';
 import { auctionSnapshotToRfq } from '../../listings/utils/listing-rfq';
 import { messageOnSendEnabled } from '../../admin/app-settings';
 

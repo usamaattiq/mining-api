@@ -588,6 +588,7 @@ class ListingService {
     if (
       listing.category === 'equipment' &&
       listing.postedAs === 'buyer' &&
+      input.category === 'equipment' &&
       input.requestMode !== listing.requestMode
     ) {
       const modes = await buyerEquipmentRequestModes();
@@ -1009,9 +1010,7 @@ class ListingService {
         }
       } else {
         const buyerEquipmentRequest =
-          listing.category === 'equipment' &&
-          listing.postedAs === 'buyer' &&
-          listing.requestMode !== 'auction';
+          listing.category === 'equipment' && listing.postedAs === 'buyer';
         const snapshot = await rfqClient.getSnapshot(
           listing.rfqId,
           buyerEquipmentRequest ? listing.ownerId : viewerId,
