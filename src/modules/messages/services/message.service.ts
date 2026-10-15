@@ -12,7 +12,7 @@ import { toConversationDto } from '../utils/conversation.mapper';
 import { emitChatMessage, emitChatRead } from '../../../realtime/chat.emitter';
 import { auctionClient } from '../../../integrations/auction/auction.client';
 import { auctionSnapshotToRfq } from '../../listings/utils/listing-rfq';
-import { rfqClient } from '../../../integrations/rfq/rfq.client';
+import { messageOnSendEnabled } from '../../admin/app-settings';
 
 async function buyerHasSentOffer(
   category: string,
@@ -24,11 +24,17 @@ async function buyerHasSentOffer(
     category === 'gold'
       ? auctionSnapshotToRfq(await auctionClient.getSnapshot(rfqId, ownerId))
       : await rfqClient.getSnapshot(rfqId, ownerId);
+  const messageOnSend = await messageOnSendEnabled();
   return (snapshot.offers ?? []).some((offer) => {
     const responderId = String(offer.responder_id ?? offer.responderId ?? '');
     if (responderId !== buyerId) return false;
-    if (category === 'gold') return true;
-    return offer.status === 'active' || offer.status === 'selected' || offer.status === 'confirmed';
+    if (messageOnSend && category === 'gold') return true;
+    if (messageOnSend) {
+      return (
+        offer.status === 'active' || offer.status === 'selected' || offer.status === 'confirmed'
+      );
+    }
+    return offer.status === 'selected' || offer.status === 'confirmed';
   });
 }
 

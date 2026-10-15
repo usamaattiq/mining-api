@@ -4,6 +4,7 @@ import { wrap } from '../../common/http/wrap';
 import { sendSuccess } from '../../common/http/api-response';
 import { validate } from '../../common/validation/validate';
 import { authenticateUser } from '../auth/middleware/authenticate-user';
+import { messageOnSendEnabled } from '../admin/app-settings';
 import { listingController } from './controllers/listing.controller';
 import {
   createListingBodySchema,
@@ -37,6 +38,13 @@ listingsRouter.get(
 listingsRouter.get(
   '/my-offers',
   wrap((req, res) => listingController.listMyOffers(req, res)),
+);
+
+listingsRouter.get(
+  '/settings',
+  wrap(async (_req, res) => {
+    sendSuccess(res, 200, { messageOnSend: await messageOnSendEnabled() });
+  }),
 );
 
 listingsRouter.get(

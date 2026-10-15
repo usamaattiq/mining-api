@@ -443,3 +443,10 @@ model InAppNotification {
   @@index([userId, sentAt])
   @@map("in_app_notifications")
 }
+
+model AppSetting {
+  key   String @id
+  value String
+
+  @@map("app_settings")
+}

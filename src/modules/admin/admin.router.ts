@@ -12,6 +12,7 @@ import { userSessionRepository } from '../auth/repositories/user-session.reposit
 import { toListingDto } from '../listings/utils/listing.mapper';
 import { attachRfqStatuses } from '../listings/utils/listing-rfq';
 import { requireAdmin } from './require-admin';
+import { messageOnSendEnabled, setMessageOnSend } from './app-settings';
 import {
   createCategoryBodySchema,
   listingStatusBodySchema,
@@ -41,6 +42,24 @@ function pageOf(value: unknown): number {
   const page = Number(value);
   return Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
 }
+
+adminRouter.get(
+  '/settings',
+  wrap(async (_req, res) => {
+    sendSuccess(res, 200, { messageOnSend: await messageOnSendEnabled() });
+  }),
+);
+
+adminRouter.patch(
+  '/settings',
+  wrap(async (req, res) => {
+    const enabled = (req.body as { messageOnSend?: unknown }).messageOnSend;
+    if (typeof enabled !== 'boolean') {
+      throw new AppError('messageOnSend is required', 400, ErrorCode.VALIDATION_ERROR);
+    }
+    sendSuccess(res, 200, { messageOnSend: await setMessageOnSend(enabled) });
+  }),
+);
 
 adminRouter.get(
   '/users',
