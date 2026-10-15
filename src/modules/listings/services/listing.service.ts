@@ -134,11 +134,20 @@ async function archiveSenderOffer(input: {
   `;
 }
 
+function isAuctionListing(listing: ListingDto): boolean {
+  return (
+    listing.category === 'gold' ||
+    (listing.category === 'equipment' && listing.requestMode === 'auction')
+  );
+}
+
 async function withSenderOfferArchives(
   listing: ListingDto,
   viewerId: string | undefined,
 ): Promise<ListingDto> {
-  if (!viewerId || !listing.rfq || listing.ownerId === viewerId) return listing;
+  if (!viewerId || !listing.rfq || listing.ownerId === viewerId || isAuctionListing(listing)) {
+    return listing;
+  }
   const rows = await prisma.$queryRaw<
     Array<{
       offerId: string;
@@ -208,6 +217,13 @@ async function withEquipmentOfferKind(listing: ListingDto, viewerId: string): Pr
       ...listing.rfq,
       ...(offers ? { offers } : {}),
       ...(mine ? { myOfferKind: mine } : {}),
+      ...(listing.rfq.myOffers
+        ? {
+            myOffers: listing.rfq.myOffers.map((offer) =>
+              offer.responderId === viewerId && mine ? { ...offer, kind: mine } : offer,
+            ),
+          }
+        : {}),
     },
   };
 }
@@ -231,6 +247,13 @@ async function withServiceDelivery(listing: ListingDto, viewerId: string): Promi
       ...listing.rfq,
       ...(offers ? { offers } : {}),
       ...(mine ? { myOfferDelivery: mine } : {}),
+      ...(listing.rfq.myOffers
+        ? {
+            myOffers: listing.rfq.myOffers.map((offer) =>
+              offer.responderId === viewerId && mine ? { ...offer, delivery: mine } : offer,
+            ),
+          }
+        : {}),
     },
   };
 }
@@ -1041,7 +1064,11 @@ class ListingService {
       mapRfqError(error, `Could not ${action} offer`);
     }
 
-    if (action === 'withdraw' || action === 'decline' || action === 'reject') {
+    if (
+      (action === 'withdraw' || action === 'decline' || action === 'reject') &&
+      listing.category !== 'gold' &&
+      listing.requestMode !== 'auction'
+    ) {
       const senderId = action === 'reject' ? responderId : (responderId ?? viewerId);
       if (senderId) {
         const [equipmentChoice, serviceChoice] = await Promise.all([
