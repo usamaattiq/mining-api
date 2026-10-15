@@ -242,9 +242,7 @@ function reservedRequestUnits(
   offers: { status?: string; offered_quantity?: number | string | null }[] | undefined,
 ): number {
   return (offers ?? [])
-    .filter((offer) =>
-      ['active', 'pending', 'selected', 'confirmed'].includes(String(offer.status)),
-    )
+    .filter((offer) => String(offer.status) === 'confirmed')
     .reduce((sum, offer) => sum + Math.max(Number(offer.offered_quantity) || 1, 1), 0);
 }
 
@@ -685,7 +683,7 @@ class ListingService {
         listing.category === 'equipment' && listing.postedAs === 'buyer' && !auctionBid;
       const catalogUnits = Math.max(listing.units ?? 1, 1);
       const buyerSnapshot = buyerEquipmentRequest
-        ? await rfqClient.getSnapshot(listing.rfqId, viewerId)
+        ? await rfqClient.getSnapshot(listing.rfqId, listing.ownerId)
         : undefined;
       const available = auctionBid
         ? catalogUnits
@@ -884,10 +882,10 @@ class ListingService {
           actorId: viewerId,
           action,
         });
-        if (buyerEquipmentRequest && (action === 'select' || action === 'confirm')) {
+        if (buyerEquipmentRequest && action === 'confirm') {
           const after = await rfqClient.getSnapshot(listing.rfqId, listing.ownerId);
           const filled = (after.offers ?? [])
-            .filter((row) => row.status === 'selected' || row.status === 'confirmed')
+            .filter((row) => row.status === 'confirmed')
             .reduce((sum, row) => sum + Math.max(Number(row.offered_quantity) || 1, 1), 0);
           if (filled >= Math.max(listing.units ?? 1, 1)) {
             await rfqClient.completeRfq(listing.rfqId, listing.ownerId).catch(() => undefined);
@@ -1082,7 +1080,7 @@ class ListingService {
         listing.category === 'equipment' && listing.postedAs === 'buyer';
       const nextUnits = Math.max(input.units ?? 1, 1);
       if (buyerEquipmentRequest) {
-        const snapshot = await rfqClient.getSnapshot(listing.rfqId, viewerId);
+        const snapshot = await rfqClient.getSnapshot(listing.rfqId, listing.ownerId);
         const others = (snapshot.offers ?? []).filter((row) => String(row.id) !== offerId);
         const available = Math.max(
           0,

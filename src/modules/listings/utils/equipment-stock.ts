@@ -1,14 +1,56 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../../common/database/prisma';
+import { rfqClient } from '../../../integrations/rfq/rfq.client';
+import type { RfqOfferSummary } from '../../../integrations/rfq/rfq.types';
 import type { EquipmentListingDto, ListingDto, ListingRfqDto } from '../types/listing.types';
 
 const RESERVED = ['selected', 'active'] as const;
 const REQUEST_RESERVED = new Set(['active', 'pending', 'selected', 'confirmed']);
-const REQUEST_FILLED = new Set(['selected', 'confirmed']);
 const OPEN_OFFER = ['pending', 'selected', 'active'] as const;
 const VISIBLE_OFFER = ['pending', 'selected', 'active', 'declined'] as const;
 
 export type EquipmentDealKind = 'rent' | 'sale';
+
+export function confirmedOfferUnits(
+  offers: Array<RfqOfferSummary | { status?: string; quantity?: number }> | undefined,
+): number {
+  return (offers ?? [])
+    .filter((offer) => offer.status === 'confirmed' || offer.status === 'completed')
+    .reduce((sum, offer) => {
+      const raw = 'offered_quantity' in offer ? offer.offered_quantity : undefined;
+      const quantity = raw ?? ('quantity' in offer ? offer.quantity : undefined);
+      return sum + Math.max(Number(quantity) || 1, 1);
+    }, 0);
+}
+
+/** Confirmed units are only listed on the owner's RFQ snapshot, not on another supplier's. */
+export async function confirmedUnitsForBuyerRequests(
+  listings: ListingDto[],
+): Promise<Map<string, number>> {
+  const filled = new Map<string, number>();
+  const requests = listings.filter(
+    (listing): listing is EquipmentListingDto =>
+      listing.category === 'equipment' &&
+      listing.postedAs === 'buyer' &&
+      listing.requestMode !== 'auction' &&
+      Boolean(listing.rfq?.id && listing.ownerId),
+  );
+  await Promise.all(
+    requests.map(async (listing) => {
+      const rfqId = listing.rfq?.id;
+      if (!rfqId) return;
+      try {
+        const snapshot = await rfqClient.getSnapshot(rfqId, listing.ownerId);
+        const fromOwner = confirmedOfferUnits(snapshot.offers);
+        const fromViewer = confirmedOfferUnits(listing.rfq?.offers);
+        filled.set(listing.id, Math.max(fromOwner, fromViewer));
+      } catch {
+        filled.set(listing.id, confirmedOfferUnits(listing.rfq?.offers));
+      }
+    }),
+  );
+  return filled;
+}
 
 export function buyerRequestUnitSplit(listing: {
   units: number;
@@ -19,13 +61,13 @@ export function buyerRequestUnitSplit(listing: {
   for (const offer of listing.rfq?.offers ?? []) {
     const units = Math.max(offer.quantity ?? 1, 1);
     if (REQUEST_RESERVED.has(offer.status)) reserved += units;
-    if (REQUEST_FILLED.has(offer.status)) filled += units;
+    if (offer.status === 'confirmed') filled += units;
   }
   const total = Math.max(listing.units, 1);
   return {
     reserved,
     filled,
-    available: Math.max(0, total - reserved),
+    available: Math.max(0, total - filled),
   };
 }
 
@@ -127,19 +169,21 @@ export async function withEquipmentAvailability(
           include: { buyer: { select: { id: true, fullName: true } } },
           orderBy: { createdAt: 'desc' },
         });
+  const confirmedByListing = await confirmedUnitsForBuyerRequests(listings);
   return listings.map((listing) => {
     if (listing.category !== 'equipment') return listing;
     const available = Math.max(0, listing.units - (reserved.get(listing.id) ?? 0));
     if (!isSupplierEquipment(listing)) {
       if (listing.postedAs === 'buyer' && listing.requestMode !== 'auction' && listing.rfq) {
-        const split = buyerRequestUnitSplit(listing);
-        const done = split.filled >= listing.units;
+        const filled = confirmedByListing.get(listing.id) ?? buyerRequestUnitSplit(listing).filled;
+        const remaining = Math.max(0, listing.units - filled);
+        const done = filled >= listing.units;
         return {
           ...listing,
-          availableUnits: split.available,
+          availableUnits: remaining,
           rfq: {
             ...listing.rfq,
-            canSubmitOffer: split.available > 0 && listing.rfq.canSubmitOffer !== false,
+            canSubmitOffer: remaining > 0 && listing.rfq.canSubmitOffer !== false,
             ...(done
               ? {
                   status: 'completed',
