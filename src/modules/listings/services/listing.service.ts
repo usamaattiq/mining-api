@@ -860,9 +860,7 @@ class ListingService {
         );
         responderId = offer ? String(offer.responder_id ?? offer.responderId ?? '') : undefined;
         const buyerEquipmentRequest =
-          listing.category === 'equipment' &&
-          listing.postedAs === 'buyer' &&
-          listing.requestMode !== 'auction';
+          listing.category === 'equipment' && listing.postedAs === 'buyer';
         if (buyerEquipmentRequest && (action === 'select' || action === 'confirm')) {
           const accepting = Math.max(Number(offer?.offered_quantity) || 1, 1);
           const alreadyFilled = (snapshot.offers ?? [])
@@ -1081,9 +1079,7 @@ class ListingService {
         throw new AppError('Choose rent or sale for this offer', 400, ErrorCode.VALIDATION_ERROR);
       }
       const buyerEquipmentRequest =
-        listing.category === 'equipment' &&
-        listing.postedAs === 'buyer' &&
-        listing.requestMode !== 'auction';
+        listing.category === 'equipment' && listing.postedAs === 'buyer';
       const nextUnits = Math.max(input.units ?? 1, 1);
       if (buyerEquipmentRequest) {
         const snapshot = await rfqClient.getSnapshot(listing.rfqId, viewerId);
