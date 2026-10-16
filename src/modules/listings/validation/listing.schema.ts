@@ -84,6 +84,17 @@ export const createListingBodySchema = z.object({
           path: ['mode'],
         });
       }
+      if (
+        value.category === 'services' &&
+        value.postedAs === 'supplier' &&
+        !value.unitLabel.trim()
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Choose a unit for this service',
+          path: ['unitLabel'],
+        });
+      }
     }),
 });
 
