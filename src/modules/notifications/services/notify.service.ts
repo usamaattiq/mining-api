@@ -20,8 +20,8 @@ export const notifyService = {
       deepLink: input.deepLink,
       data: input.data,
       userIds: [input.userId],
-      channelId: input.channelId ?? 'default',
-      sound: 'default',
+      channelId: input.channelId ?? 'wave_ring',
+      sound: 'wave_ring.wav',
       idempotencyKey: input.idempotencyKey,
     });
   },
