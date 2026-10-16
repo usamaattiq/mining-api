@@ -36,6 +36,60 @@ import type {
   SubmitListingOfferBody,
 } from '../validation/listing.schema';
 
+async function saveOfferDescription(
+  listingId: string,
+  offerId: string,
+  description: string | undefined,
+): Promise<void> {
+  if (description == null) return;
+  const text = description.trim().slice(0, 200);
+  if (!text) {
+    await prisma.listingOfferNote.deleteMany({ where: { listingId, offerId } });
+    return;
+  }
+  await prisma.listingOfferNote.upsert({
+    where: { listingId_offerId: { listingId, offerId } },
+    create: { listingId, offerId, description: text },
+    update: { description: text },
+  });
+}
+
+async function newestOfferId(rfqId: string, viewerId: string): Promise<string | undefined> {
+  const snapshot = await rfqClient.getSnapshot(rfqId, viewerId);
+  const rows = [...(snapshot.my_offers ?? [])].sort((left, right) => {
+    const leftAt = left.created_at ? new Date(left.created_at).getTime() : 0;
+    const rightAt = right.created_at ? new Date(right.created_at).getTime() : 0;
+    return rightAt - leftAt;
+  });
+  const id = rows[0]?.id;
+  return id != null ? String(id) : undefined;
+}
+
+async function withOfferDescriptions(listing: ListingDto): Promise<ListingDto> {
+  const rfq = listing.rfq;
+  if (!rfq) return listing;
+  const ids = [...(rfq.offers ?? []), ...(rfq.myOffers ?? [])].map((offer) => offer.id);
+  if (ids.length === 0) return listing;
+  const notes = await prisma.listingOfferNote.findMany({
+    where: { listingId: listing.id, offerId: { in: ids } },
+    select: { offerId: true, description: true },
+  });
+  if (notes.length === 0) return listing;
+  const byOffer = new Map(notes.map((note) => [note.offerId, note.description]));
+  const apply = <T extends { id: string; description?: string }>(offer: T): T => {
+    const description = byOffer.get(offer.id);
+    return description ? { ...offer, description } : offer;
+  };
+  return {
+    ...listing,
+    rfq: {
+      ...rfq,
+      ...(rfq.offers ? { offers: rfq.offers.map(apply) } : {}),
+      ...(rfq.myOffers ? { myOffers: rfq.myOffers.map(apply) } : {}),
+    },
+  };
+}
+
 function mapRfqError(error: unknown, fallback: string): never {
   if (error instanceof RfqApiError) {
     const detail =
@@ -801,7 +855,7 @@ class ListingService {
       withPhones ?? withStock ?? withKind,
       viewerId,
     );
-    return withOfferSentAt(withHistory, viewerId);
+    return withOfferDescriptions(await withOfferSentAt(withHistory, viewerId));
   }
 
   async submitOffer(
@@ -894,6 +948,10 @@ class ListingService {
           capacityMode: 'partial',
           offeredQuantity: units ?? 1,
         });
+        if (input.description?.trim()) {
+          const offerId = await newestOfferId(listing.rfqId, viewerId);
+          if (offerId) await saveOfferDescription(listing.id, offerId, input.description);
+        }
         if (
           listing.category === 'services' &&
           listing.serviceType === 'both' &&
@@ -1231,6 +1289,7 @@ class ListingService {
       fulfillment?: 'rent' | 'sale';
       delivery?: 'onsite' | 'online';
       handover?: 'pickup' | 'delivery';
+      description?: string;
     },
   ): Promise<ListingDto> {
     const listing = await listingRepository.findById(listingId);
@@ -1305,7 +1364,20 @@ class ListingService {
             price: unitPrice,
             ...(listing.category === 'equipment' ? { offeredQuantity: nextUnits } : {}),
           });
+          const replacementId = await newestOfferId(listing.rfqId, viewerId);
+          if (replacementId && replacementId !== offerId) {
+            await saveOfferDescription(listing.id, replacementId, input.description);
+            if (input.description == null) {
+              const previous = await prisma.listingOfferNote.findUnique({
+                where: { listingId_offerId: { listingId: listing.id, offerId } },
+              });
+              if (previous) {
+                await saveOfferDescription(listing.id, replacementId, previous.description);
+              }
+            }
+          }
         }
+        await saveOfferDescription(listing.id, offerId, input.description);
       } catch (error) {
         if (error instanceof AppError) throw error;
         mapRfqError(error, 'Could not update offer');
@@ -1388,6 +1460,7 @@ class ListingService {
         data: { units, price: String(totalPrice), kind, handover },
       });
     });
+    await saveOfferDescription(listing.id, offerId, input.description);
     return this.getById(listing.id, viewerId);
   }
 
@@ -1453,6 +1526,7 @@ class ListingService {
         },
       });
     });
+    await saveOfferDescription(listing.id, offerId, input.description);
     notifyListingRfq(
       listing.ownerId,
       'New offer',

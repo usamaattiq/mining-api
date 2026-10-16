@@ -29,6 +29,8 @@ export type ListingRfqOfferDto = {
   kind?: 'rent' | 'sale';
   handover?: 'pickup' | 'delivery';
   delivery?: 'onsite' | 'online';
+  /** Optional note the sender added with the offer. */
+  description?: string;
   /** When the offer was sent. */
   createdAt?: number;
   /** Set for the listing owner once this offer is confirmed. */

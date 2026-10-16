@@ -126,6 +126,7 @@ export const submitListingOfferBodySchema = z.object({
     fulfillment: z.enum(['rent', 'sale']).optional(),
     delivery: z.enum(['onsite', 'online']).optional(),
     handover: z.enum(['pickup', 'delivery']).optional(),
+    description: z.string().trim().max(200).optional(),
   }),
 });
 
@@ -164,6 +165,7 @@ export const updateListingOfferSchema = listingOfferActionParamsSchema.extend({
     fulfillment: z.enum(['rent', 'sale']).optional(),
     delivery: z.enum(['onsite', 'online']).optional(),
     handover: z.enum(['pickup', 'delivery']).optional(),
+    description: z.string().trim().max(200).optional(),
   }),
 });
 
